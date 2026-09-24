@@ -1,0 +1,257 @@
+import 'dart:math';
+
+import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/http/member.dart';
+import 'package:PiliPlus/http/user.dart';
+import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/models/common/member/tab_type.dart';
+import 'package:PiliPlus/models/model_owner.dart';
+import 'package:PiliPlus/models_new/space/space/data.dart';
+import 'package:PiliPlus/models_new/space/space/elec.dart';
+import 'package:PiliPlus/models_new/space/space/live.dart';
+import 'package:PiliPlus/models_new/space/space/reservation_card_list.dart';
+import 'package:PiliPlus/models_new/space/space/setting.dart';
+import 'package:PiliPlus/models_new/space/space/tab2.dart';
+import 'package:PiliPlus/pages/common/common_data_controller.dart';
+import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/extension/nested_scroll_ext.dart';
+import 'package:PiliPlus/utils/request_utils.dart';
+import 'package:PiliPlus/utils/share_utils.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
+    show ExtendedNestedScrollViewState;
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
+
+class MemberController extends CommonDataController<SpaceData, SpaceData?>
+    with GetTickerProviderStateMixin {
+  MemberController({required this.mid});
+  int mid;
+  String? username;
+  String? userAvatar;
+
+  late final account = Accounts.main;
+
+  Live? live;
+  int? silence;
+
+  int? isFollowed; // 被关注
+  RxInt relation = 0.obs;
+  bool get isFollow {
+    final relation = this.relation.value;
+    return relation != 0 && relation != 128 && relation != -1;
+  }
+
+  SpaceSetting? spaceSetting;
+  List<SpaceTab2>? tab2;
+  late List<Tab> tabs;
+  TabController? tabController;
+  RxInt contributeInitialIndex = 0.obs;
+
+  bool? hasSeasonOrSeries;
+
+  List<ElecItem>? charges;
+  int? chargeCount;
+  bool get hasCharge => chargeCount != null && chargeCount! > 0;
+
+  List<Owner>? guards;
+  Object? guardCount;
+  bool get hasGuard => guards?.isNotEmpty ?? false;
+
+  List<ReservationCardItem>? reserves;
+
+  final fromViewAid = Get.parameters['from_view_aid'];
+
+  final scrollKey = GlobalKey<ExtendedNestedScrollViewState>();
+
+  @override
+  void onInit() {
+    super.onInit();
+    queryData();
+  }
+
+  @override
+  bool customHandleResponse(bool isRefresh, Success<SpaceData> response) {
+    final data = response.response;
+    final card = data.card;
+    username = card?.name ?? '';
+    userAvatar = card?.face;
+
+    isFollowed = card?.relation?.isFollowed;
+
+    // charge
+    final elec = data.elec;
+    charges = elec?.list;
+    chargeCount = elec?.total;
+    // guard
+    final guard = data.guard;
+    guards = guard?.item;
+    guardCount = guard?.count;
+
+    reserves = data.reservationCardList;
+
+    switch (data.relation) {
+      case -1:
+        relation.value = 128;
+      case -999:
+        if (data.guestRelation == -1) {
+          relation.value = -1;
+        }
+      default:
+        relation.value = card?.relation?.isFollow == 1
+            ? data.relSpecial == 1
+                  ? -10
+                  : card?.relation?.status ?? 2
+            : data.relation ?? 0;
+    }
+    tab2 = data.tab2;
+    live = data.live;
+    silence = card?.silence;
+    if ((data.ugcSeason?.count != null && data.ugcSeason?.count != 0) ||
+        data.series?.item?.isNotEmpty == true) {
+      hasSeasonOrSeries = true;
+    }
+    tab2?.retainWhere((item) => MemberTabType.contains(item.param!));
+    if (tab2?.isNotEmpty == true) {
+      if (data.hasItem != true && tab2!.first.param == 'home') {
+        // remove empty home tab
+        tab2!.removeAt(0);
+      }
+      if (tab2!.isNotEmpty) {
+        int initialIndex = -1;
+        MemberTabType memberTab = Pref.memberTab;
+        if (memberTab != MemberTabType.def) {
+          initialIndex = tab2!.indexWhere((item) {
+            return item.param == memberTab.name;
+          });
+        }
+        if (initialIndex == -1) {
+          if (data.defaultTab == 'video') {
+            data.defaultTab = 'contribute';
+          }
+          initialIndex = tab2!.indexWhere((item) {
+            return item.param == data.defaultTab;
+          });
+        }
+        tabs = tab2!.map((item) => Tab(text: item.title ?? '')).toList();
+        tabController?.dispose();
+        tabController = TabController(
+          vsync: this,
+          length: tabs.length,
+          initialIndex: max(0, initialIndex),
+        );
+      }
+    }
+    if (mid == account.mid) {
+      spaceSetting = data.setting;
+    }
+    loadingState.value = response;
+    return true;
+  }
+
+  @override
+  bool handleError(String? errMsg) {
+    tab2 = const [
+      SpaceTab2(title: '动态', param: 'dynamic'),
+      SpaceTab2(
+        title: '投稿',
+        param: 'contribute',
+        items: [SpaceTab2Item(title: '视频', param: 'video')],
+      ),
+      SpaceTab2(title: '收藏', param: 'favorite'),
+      SpaceTab2(title: '追番', param: 'bangumi'),
+    ];
+    tabs = tab2!.map((item) => Tab(text: item.title)).toList();
+    tabController?.dispose();
+    tabController = TabController(
+      vsync: this,
+      length: tabs.length,
+    );
+    username = errMsg;
+    loadingState.value = const Success(null);
+    return true;
+  }
+
+  @override
+  Future<LoadingState<SpaceData>> customGetData() => MemberHttp.space(
+    mid: mid,
+    fromViewAid: fromViewAid,
+  );
+
+
+  /// 加入/移出黑名单（完全本地，无需登录）
+  void blockUser([BuildContext? context]) {
+    final isBlocked = GlobalData().blackMids.contains(mid);
+    final name = username ?? '';
+    if (isBlocked) {
+      Pref.removeBlackMid(mid);
+      SmartDialog.showToast('已移出黑名单 $name($mid)');
+    } else {
+      Pref.setBlackMid(mid);
+      SmartDialog.showToast('已加入黑名单 $name($mid)，相关内容将自动隐藏');
+    }
+  }
+
+  bool get isLocalBlocked => GlobalData().blackMids.contains(mid);
+
+  void shareUser() {
+    ShareUtils.shareText('https://space.bilibili.com/$mid');
+  }
+
+  void onFollow(BuildContext context) {
+    if (mid == account.mid) {
+      Get.toNamed('/editProfile');
+    } else if (relation.value == 128) {
+      // 官方关系为已拉黑时，关注按钮仍走本地移出逻辑，避免请求官方接口
+      blockUser(context);
+      relation.value = 0;
+    } else {
+      if (!account.isLogin) {
+        SmartDialog.showToast('账号未登录');
+        return;
+      }
+      RequestUtils.actionRelationMod(
+        context: context,
+        mid: mid,
+        isFollow: isFollow,
+        afterMod: (attribute) => relation.value = attribute,
+      );
+    }
+  }
+
+  @override
+  void onClose() {
+    tabController?.dispose();
+    super.onClose();
+  }
+
+  Future<void> onRemoveFan() async {
+    final res = await VideoHttp.relationMod(mid: mid, act: 7, reSrc: 11);
+    if (res.isSuccess) {
+      isFollowed = null;
+      if (relation.value == 4) {
+        relation.value = 2;
+      }
+      SmartDialog.showToast('移除成功');
+    } else {
+      res.toast();
+    }
+  }
+
+  void onTapTab(int value) {
+    if (tabController?.indexIsChanging == false) {
+      scrollKey.currentState?.animToTop();
+    }
+  }
+
+  Future<void> vipExpAdd() async {
+    final res = await UserHttp.vipExpAdd();
+    if (res.isSuccess) {
+      SmartDialog.showToast('领取成功');
+    } else {
+      res.toast();
+    }
+  }
+}
