@@ -412,12 +412,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     }
   }
 
-  // 关注/取关up
+  // 关注/取关up（本地，无需登录）
   Future<void> actionRelationMod(BuildContext context) async {
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
     final videoDetail = this.videoDetail.value;
     if (videoDetail.staff?.isNotEmpty == true) {
       return;
@@ -428,8 +424,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     }
     int attr = followStatus.value.attribute ?? 0;
     final localBlocked = GlobalData().blackMids.contains(mid);
+    final localFollowed = GlobalData().localFollowMids.contains(mid);
     if (attr == 128 || localBlocked) {
-      // 移出黑名单：纯本地
       final res = await VideoHttp.relationMod(
         mid: mid,
         act: 6,
@@ -445,13 +441,14 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       RequestUtils.actionRelationMod(
         context: context,
         mid: mid,
-        isFollow: attr != 0,
+        isFollow: attr != 0 || localFollowed,
         followStatus: followStatus.value,
+        name: videoDetail.owner?.name,
+        face: videoDetail.owner?.face,
         afterMod: (attribute) {
           followStatus
             ..value.attribute = attribute
             ..refresh();
-          Timer(const Duration(milliseconds: 500), queryFollowStatus);
         },
       );
     }

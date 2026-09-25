@@ -40,6 +40,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   int? isFollowed; // 被关注
   RxInt relation = 0.obs;
   bool get isFollow {
+    if (GlobalData().localFollowMids.contains(mid)) return true;
     final relation = this.relation.value;
     return relation != 0 && relation != 128 && relation != -1;
   }
@@ -203,19 +204,18 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   void onFollow(BuildContext context) {
     if (mid == account.mid) {
       Get.toNamed('/editProfile');
-    } else if (relation.value == 128) {
-      // 官方关系为已拉黑时，关注按钮仍走本地移出逻辑，避免请求官方接口
+    } else if (GlobalData().blackMids.contains(mid) || relation.value == 128) {
       blockUser(context);
       relation.value = 0;
     } else {
-      if (!account.isLogin) {
-        SmartDialog.showToast('账号未登录');
-        return;
-      }
+      // 本地关注，无需登录
+      final followed = isFollow;
       RequestUtils.actionRelationMod(
         context: context,
         mid: mid,
-        isFollow: isFollow,
+        isFollow: followed,
+        name: username,
+        face: userAvatar,
         afterMod: (attribute) => relation.value = attribute,
       );
     }

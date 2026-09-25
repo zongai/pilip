@@ -84,6 +84,50 @@ abstract final class Pref {
     GlobalData().blackMids..remove(mid),
   );
 
+  /// 本地关注列表 [{mid, name, face}, ...]
+  static List<Map> get localFollows {
+    final raw = _localCache.get(LocalCacheKey.localFollows, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localFollows(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localFollows, list);
+
+  static bool isLocalFollowed(int mid) =>
+      GlobalData().localFollowMids.contains(mid);
+
+  static void addLocalFollow({
+    required int mid,
+    String? name,
+    String? face,
+  }) {
+    final list = List<Map>.from(localFollows);
+    final idx = list.indexWhere((e) => e['mid'] == mid);
+    final item = {
+      'mid': mid,
+      'name': name ?? (idx >= 0 ? list[idx]['name'] : null) ?? '',
+      'face': face ?? (idx >= 0 ? list[idx]['face'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localFollows = list;
+    GlobalData().localFollowMids.add(mid);
+    GlobalData().localFollowList = list;
+  }
+
+  static void removeLocalFollow(int mid) {
+    final list = List<Map>.from(localFollows)..removeWhere((e) => e['mid'] == mid);
+    localFollows = list;
+    GlobalData().localFollowMids.remove(mid);
+    GlobalData().localFollowList = list;
+  }
+
+
+
   static MemberTabType get memberTab =>
       MemberTabType.values[_setting.get(
         SettingBoxKey.memberTab,

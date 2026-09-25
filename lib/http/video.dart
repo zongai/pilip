@@ -612,7 +612,17 @@ abstract final class VideoHttp {
     required int act,
     required int reSrc,
   }) async {
-    // 黑名单相关操作全部走本地
+    // 关注 / 取消关注 / 黑名单：全部走本地，不请求官方、无需登录
+    if (act == 1) {
+      // 关注
+      Pref.addLocalFollow(mid: mid);
+      return const Success(null);
+    }
+    if (act == 2) {
+      // 取消关注
+      Pref.removeLocalFollow(mid);
+      return const Success(null);
+    }
     if (act == 5) {
       Pref.setBlackMid(mid);
       return const Success(null);

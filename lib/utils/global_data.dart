@@ -13,6 +13,13 @@ class GlobalData {
 
   Set<int> blackMids = Pref.blackMids;
 
+  List<Map> localFollowList = Pref.localFollows;
+  Set<int> localFollowMids = {
+    for (final e in Pref.localFollows)
+      if (e['mid'] is int) e['mid'] as int
+      else int.tryParse('${e['mid']}') ?? 0,
+  }..remove(0);
+
   bool dynamicsWaterfallFlow = Pref.dynamicsWaterfallFlow;
 
   bool showMedal = Pref.showMedal;

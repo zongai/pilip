@@ -436,7 +436,11 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
         final mid = introController.videoDetail.value.owner?.mid;
         final localBlocked =
             mid != null && GlobalData().blackMids.contains(mid);
-        final displayAttr = localBlocked ? 128 : attr;
+        final localFollowed =
+            mid != null && GlobalData().localFollowMids.contains(mid);
+        final displayAttr = localBlocked
+            ? 128
+            : (localFollowed && attr == 0 ? 2 : attr);
         return TextButton(
           onPressed: () => introController.actionRelationMod(context),
           style: TextButton.styleFrom(

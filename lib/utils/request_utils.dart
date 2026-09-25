@@ -35,6 +35,7 @@ import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -137,120 +138,25 @@ abstract final class RequestUtils {
     required bool isFollow,
     required ValueChanged<int>? afterMod,
     RelationData? followStatus,
+    String? name,
+    String? face,
   }) async {
     if (mid == null) {
       return;
     }
     feedBack();
-    if (!isFollow) {
-      final res = await VideoHttp.relationMod(
-        mid: mid,
-        act: 1,
-        reSrc: 11,
-      );
-      if (res.isSuccess) {
-        SmartDialog.showToast('关注成功');
-        afterMod?.call(2);
-      } else {
-        res.toast();
-      }
-    } else {
-      if (followStatus?.tag == null) {
-        final res = await UserHttp.userRelation(mid);
-        if (res case Success(:final response)) {
-          followStatus = response;
-        } else {
-          res.toast();
-          return;
-        }
-      }
+    final id = mid is int ? mid : int.tryParse(mid.toString());
+    if (id == null) return;
 
-      if (context.mounted) {
-        bool isSpecialFollowed = followStatus!.special == 1;
-        String text = isSpecialFollowed ? '移除特别关注' : '加入特别关注';
-        showDialog(
-          context: context,
-          builder: (context) => SimpleDialog(
-            clipBehavior: Clip.hardEdge,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            children: [
-              DialogOption(
-                onPressed: () async {
-                  Get.back();
-                  final res = await MemberHttp.specialAction(
-                    fid: mid,
-                    isAdd: !isSpecialFollowed,
-                  );
-                  if (res.isSuccess) {
-                    SmartDialog.showToast('$text成功');
-                    afterMod?.call(isSpecialFollowed ? 2 : -10);
-                  } else {
-                    res.toast();
-                  }
-                },
-                child: Text(text, style: const TextStyle(fontSize: 14)),
-              ),
-              DialogOption(
-                onPressed: () async {
-                  Get.back();
-                  final result = await showModalBottomSheet<Set<int>>(
-                    context: context,
-                    useSafeArea: true,
-                    isScrollControlled: true,
-                    constraints: BoxConstraints(
-                      maxWidth: min(640, context.mediaQueryShortestSide),
-                    ),
-                    builder: (BuildContext context) {
-                      final maxChildSize =
-                          PlatformUtils.isMobile &&
-                              !context.mediaQuerySize.isPortrait
-                          ? 1.0
-                          : 0.7;
-                      return DraggableScrollableSheet(
-                        minChildSize: 0,
-                        maxChildSize: 1,
-                        snap: true,
-                        expand: false,
-                        snapSizes: [maxChildSize],
-                        initialChildSize: maxChildSize,
-                        builder: (context, scrollController) {
-                          return GroupPanel(
-                            mid: mid,
-                            tags: followStatus!.tag,
-                            scrollController: scrollController,
-                          );
-                        },
-                      );
-                    },
-                  );
-                  if (result != null) {
-                    followStatus!.tag = result.toList();
-                    afterMod?.call(result.contains(-10) ? -10 : 2);
-                  }
-                },
-                child: const Text('设置分组', style: TextStyle(fontSize: 14)),
-              ),
-              DialogOption(
-                onPressed: () async {
-                  Get.back();
-                  final res = await VideoHttp.relationMod(
-                    mid: mid,
-                    act: 2,
-                    reSrc: 11,
-                  );
-                  if (res.isSuccess) {
-                    SmartDialog.showToast('取消关注成功');
-                    afterMod?.call(0);
-                  } else {
-                    res.toast();
-                  }
-                },
-                child: const Text('取消关注', style: TextStyle(fontSize: 14)),
-              ),
-            ],
-          ),
-        );
-      }
+    // 完全本地关注/取消关注
+    if (!isFollow) {
+      Pref.addLocalFollow(mid: id, name: name, face: face);
+      SmartDialog.showToast('关注成功');
+      afterMod?.call(2);
+    } else {
+      Pref.removeLocalFollow(id);
+      SmartDialog.showToast('取消关注成功');
+      afterMod?.call(0);
     }
   }
 
