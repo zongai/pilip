@@ -17,6 +17,8 @@ import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/share_utils.dart';
+import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -175,6 +177,34 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
 
   List<Widget> _actions(ThemeData theme) {
     return [
+      // 本地收藏播放列表（无需登录）
+      Obx(() {
+        final folder = _favDetailController.folderInfo.value;
+        final id = _favDetailController.mediaId;
+        final starred = GlobalData().localPlaylistIds.contains(id);
+        return IconButton(
+          tooltip: starred ? '取消本地收藏' : '本地收藏播放列表',
+          icon: Icon(starred ? Icons.star : Icons.star_border),
+          color: starred ? theme.colorScheme.primary : null,
+          onPressed: () {
+            if (starred) {
+              Pref.removeLocalPlaylist(id);
+              SmartDialog.showToast('已取消本地收藏');
+            } else {
+              Pref.addLocalPlaylist(
+                mediaId: id,
+                title: folder.title,
+                cover: folder.cover,
+                mediaCount: folder.mediaCount,
+                upperName: folder.upper?.name,
+              );
+              SmartDialog.showToast('已本地收藏播放列表');
+            }
+            // 触发重建
+            _favDetailController.folderInfo.refresh();
+          },
+        );
+      }),
       IconButton(
         tooltip: '搜索',
         onPressed: () {

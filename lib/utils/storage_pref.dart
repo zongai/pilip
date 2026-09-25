@@ -128,6 +128,55 @@ abstract final class Pref {
 
 
 
+
+  /// 本地播放列表收藏 [{mediaId, title, cover, mediaCount, upperName}, ...]
+  static List<Map> get localPlaylists {
+    final raw = _localCache.get(LocalCacheKey.localPlaylists, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localPlaylists(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localPlaylists, list);
+
+  static bool isLocalPlaylist(int mediaId) =>
+      GlobalData().localPlaylistIds.contains(mediaId);
+
+  static void addLocalPlaylist({
+    required int mediaId,
+    String? title,
+    String? cover,
+    int? mediaCount,
+    String? upperName,
+  }) {
+    final list = List<Map>.from(localPlaylists);
+    final idx = list.indexWhere((e) => e['mediaId'] == mediaId);
+    final item = {
+      'mediaId': mediaId,
+      'title': title ?? (idx >= 0 ? list[idx]['title'] : null) ?? '',
+      'cover': cover ?? (idx >= 0 ? list[idx]['cover'] : null) ?? '',
+      'mediaCount': mediaCount ?? (idx >= 0 ? list[idx]['mediaCount'] : null) ?? 0,
+      'upperName': upperName ?? (idx >= 0 ? list[idx]['upperName'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localPlaylists = list;
+    GlobalData().localPlaylistIds.add(mediaId);
+    GlobalData().localPlaylistList = list;
+  }
+
+  static void removeLocalPlaylist(int mediaId) {
+    final list = List<Map>.from(localPlaylists)
+      ..removeWhere((e) => e['mediaId'] == mediaId);
+    localPlaylists = list;
+    GlobalData().localPlaylistIds.remove(mediaId);
+    GlobalData().localPlaylistList = list;
+  }
+
+
   static MemberTabType get memberTab =>
       MemberTabType.values[_setting.get(
         SettingBoxKey.memberTab,
