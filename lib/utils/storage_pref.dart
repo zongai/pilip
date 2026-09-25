@@ -296,6 +296,73 @@ abstract final class Pref {
     GlobalData().localLaterList = [];
   }
 
+  static void replaceLocalFollows(List<Map> list) {
+    localFollows = list;
+    GlobalData().localFollowList = list;
+    GlobalData().localFollowMids
+      ..clear()
+      ..addAll({
+        for (final e in list)
+          if (e['mid'] is int) e['mid'] as int
+          else int.tryParse('${e['mid']}') ?? 0,
+      }..remove(0));
+  }
+
+  static void mergeLocalFollows(List<Map> incoming) {
+    final map = <int, Map>{
+      for (final e in localFollows)
+        if (e['mid'] != null)
+          (e['mid'] is int ? e['mid'] as int : int.tryParse('${e['mid']}') ?? 0): e,
+    }..remove(0);
+    for (final e in incoming) {
+      final mid = e['mid'] is int ? e['mid'] as int : int.tryParse('${e['mid']}') ?? 0;
+      if (mid == 0) continue;
+      map[mid] = {
+        'mid': mid,
+        'name': e['name'] ?? map[mid]?['name'] ?? '',
+        'face': e['face'] ?? map[mid]?['face'] ?? '',
+      };
+    }
+    replaceLocalFollows(map.values.toList());
+  }
+
+  static void replaceLocalPlaylists(List<Map> list) {
+    localPlaylists = list;
+    GlobalData().localPlaylistList = list;
+    GlobalData().localPlaylistIds
+      ..clear()
+      ..addAll({
+        for (final e in list)
+          if (e['mediaId'] is int) e['mediaId'] as int
+          else int.tryParse('${e['mediaId']}') ?? 0,
+      }..remove(0));
+  }
+
+  static void mergeLocalPlaylists(List<Map> incoming) {
+    final map = <int, Map>{
+      for (final e in localPlaylists)
+        if (e['mediaId'] != null)
+          (e['mediaId'] is int ? e['mediaId'] as int : int.tryParse('${e['mediaId']}') ?? 0): e,
+    }..remove(0);
+    for (final e in incoming) {
+      final id = e['mediaId'] is int
+          ? e['mediaId'] as int
+          : int.tryParse('${e['mediaId']}') ?? 0;
+      if (id == 0) continue;
+      final old = map[id];
+      map[id] = {
+        'mediaId': id,
+        'title': e['title'] ?? old?['title'] ?? '',
+        'cover': e['cover'] ?? old?['cover'] ?? '',
+        'mediaCount': e['mediaCount'] ?? old?['mediaCount'] ?? 0,
+        'upperName': e['upperName'] ?? old?['upperName'] ?? '',
+      };
+    }
+    replaceLocalPlaylists(map.values.toList());
+  }
+
+
+
 
   static MemberTabType get memberTab =>
       MemberTabType.values[_setting.get(

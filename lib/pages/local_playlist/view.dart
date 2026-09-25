@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -48,6 +49,27 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
     );
   }
 
+  Future<void> _export() async {
+    await LocalListIo.export(
+      type: LocalListIo.playlistType,
+      fileName: 'pilip_playlists_${DateTime.now().millisecondsSinceEpoch}.json',
+      items: _list,
+    );
+  }
+
+  Future<void> _import({bool replace = false}) async {
+    final items = await LocalListIo.import(expectedType: LocalListIo.playlistType);
+    if (items == null) return;
+    if (replace) {
+      Pref.replaceLocalPlaylists(items);
+      SmartDialog.showToast('已覆盖导入 ${items.length} 个播放列表');
+    } else {
+      Pref.mergeLocalPlaylists(items);
+      SmartDialog.showToast('已合并导入 ${items.length} 个播放列表');
+    }
+    _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -56,6 +78,25 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
         title: Text(
           '本地播放列表${_list.isEmpty ? '' : ' · ${_list.length}'}',
         ),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: '导入导出',
+            onSelected: (v) {
+              if (v == 'export') {
+                _export();
+              } else if (v == 'import_merge') {
+                _import();
+              } else if (v == 'import_replace') {
+                _import(replace: true);
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'export', child: Text('导出为 JSON')),
+              PopupMenuItem(value: 'import_merge', child: Text('导入（合并）')),
+              PopupMenuItem(value: 'import_replace', child: Text('导入（覆盖）')),
+            ],
+          ),
+        ],
       ),
       body: _list.isEmpty
           ? Center(
