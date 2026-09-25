@@ -330,6 +330,44 @@ class VideoDetailController extends GetxController
     } else if (playedTime case final playedTime?) {
       watchProgress.put(cid.value.toString(), playedTime.inMilliseconds);
     }
+    _recordLocalHistory();
+  }
+
+  /// 写入本地观看历史（无需登录）
+  void _recordLocalHistory() {
+    try {
+      String? title;
+      String? coverStr = cover.value;
+      String? authorName;
+      int? authorMid;
+      int durationSec = 0;
+      int progressSec = 0;
+      if (playedTime case final t?) {
+        progressSec = t.inSeconds;
+      }
+      try {
+        final intro = Get.find<UgcIntroController>(tag: heroTag);
+        final detail = intro.videoDetail.value;
+        title = detail.title;
+        coverStr = coverStr.isNotEmpty ? coverStr : detail.pic;
+        authorName = detail.owner?.name;
+        authorMid = detail.owner?.mid;
+        durationSec = detail.duration ?? 0;
+      } catch (_) {
+        title = args['title'] as String?;
+      }
+      Pref.addLocalHistory(
+        aid: aid,
+        bvid: bvid,
+        cid: cid.value,
+        title: title,
+        cover: coverStr,
+        authorName: authorName,
+        authorMid: authorMid,
+        progress: progressSec,
+        duration: durationSec,
+      );
+    } catch (_) {}
   }
 
   void initFileSource(BiliDownloadEntryInfo entry, {bool isInit = true}) {
@@ -392,6 +430,9 @@ class VideoDetailController extends GetxController
       vsync: this,
       initialIndex: Pref.defaultShowComment ? 1 : 0,
     );
+
+    // 进入视频页即记一条本地历史（进度后续在 cacheLocalProgress 更新）
+    Future.microtask(_recordLocalHistory);
   }
 
   Future<void> getMediaList({

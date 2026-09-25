@@ -177,6 +177,126 @@ abstract final class Pref {
   }
 
 
+
+  /// 本地观看历史 [{aid,bvid,cid,title,cover,authorName,authorMid,progress,duration,viewAt}, ...]
+  static List<Map> get localHistory {
+    final raw = _localCache.get(LocalCacheKey.localHistory, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localHistory(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localHistory, list);
+
+  static void addLocalHistory({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? progress,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localHistory);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.insert(0, {
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'progress': progress ?? 0,
+      'duration': duration ?? 0,
+      'viewAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
+    // 最多保留 500 条
+    if (list.length > 500) {
+      list.removeRange(500, list.length);
+    }
+    localHistory = list;
+    GlobalData().localHistoryList = list;
+  }
+
+  static void removeLocalHistory(String key) {
+    final list = List<Map>.from(localHistory)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    localHistory = list;
+    GlobalData().localHistoryList = list;
+  }
+
+  static void clearLocalHistory() {
+    localHistory = [];
+    GlobalData().localHistoryList = [];
+  }
+
+  /// 本地稍后再看
+  static List<Map> get localLater {
+    final raw = _localCache.get(LocalCacheKey.localLater, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localLater(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localLater, list);
+
+  static bool isLocalLater({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return false;
+    return GlobalData().localLaterList.any(
+      (e) => (e['bvid'] ?? 'av${e['aid']}') == key,
+    );
+  }
+
+  static void addLocalLater({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localLater);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.insert(0, {
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'duration': duration ?? 0,
+      'addedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void removeLocalLater({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return;
+    final list = List<Map>.from(localLater)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void clearLocalLater() {
+    localLater = [];
+    GlobalData().localLaterList = [];
+  }
+
+
   static MemberTabType get memberTab =>
       MemberTabType.values[_setting.get(
         SettingBoxKey.memberTab,

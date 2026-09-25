@@ -248,6 +248,8 @@ abstract final class LocalCacheKey {
       blackMids = 'blackMids',
       localFollows = 'localFollows',
       localPlaylists = 'localPlaylists',
+      localHistory = 'localHistory',
+      localLater = 'localLater',
       danmakuFilterRules = 'danmakuFilterRules',
       mixinKey = 'mixinKey',
       timeStamp = 'timeStamp',

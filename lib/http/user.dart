@@ -1,3 +1,4 @@
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -166,27 +167,31 @@ abstract final class UserHttp {
   }
 
   // 稍后再看
+  /// 稍后再看：完全本地，无需登录
   static Future<LoadingState<void>> toViewLater({
     String? bvid,
     Object? aid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
   }) async {
     assert(aid != null || bvid != null);
-    final res = await Request().post(
-      Api.toViewLater,
-      data: {
-        'aid': ?aid,
-        'bvid': ?bvid,
-        'csrf': Accounts.main.csrf,
-      },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+    final id = aid is int ? aid : int.tryParse('$aid');
+    Pref.addLocalLater(
+      aid: id,
+      bvid: bvid,
+      cid: cid,
+      title: title,
+      cover: cover,
+      authorName: authorName,
+      authorMid: authorMid,
+      duration: duration,
     );
-    if (res.data['code'] == 0) {
-      SmartDialog.showToast('yeah！稍后再看');
-      return const Success(null);
-    } else {
-      SmartDialog.showToast(res.data['message'].toString());
-      return const Error(null);
-    }
+    SmartDialog.showToast('已加入稍后再看（本地）');
+    return const Success(null);
   }
 
   // 移除已观看

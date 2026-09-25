@@ -27,6 +27,9 @@ class GlobalData {
       else int.tryParse('${e['mid']}') ?? 0,
   }..remove(0);
 
+  List<Map> localHistoryList = Pref.localHistory;
+  List<Map> localLaterList = Pref.localLater;
+
   bool dynamicsWaterfallFlow = Pref.dynamicsWaterfallFlow;
 
   bool showMedal = Pref.showMedal;

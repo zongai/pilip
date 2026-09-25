@@ -453,17 +453,6 @@ class _MediaPageState extends CommonPageState<MinePage>
           color: theme.dividerColor.withValues(alpha: 0.1),
         ),
         ListTile(
-          onTap: () => Get.toNamed('/localPlaylistPage'),
-          dense: true,
-          leading: const Padding(
-            padding: EdgeInsets.only(left: 10),
-            child: Icon(Icons.playlist_play),
-          ),
-          title: const Text('本地播放列表'),
-          subtitle: const Text('收藏的播放列表，点击直接进入'),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        ),
-        ListTile(
           onTap: () => Get.toNamed('/fav')?.whenComplete(_autoRefresh),
           dense: true,
           title: Padding(

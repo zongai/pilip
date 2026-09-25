@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/models/common/enum_with_label.dart';
 import 'package:PiliPlus/pages/dynamics/view.dart';
 import 'package:PiliPlus/pages/local_follow/view.dart';
+import 'package:PiliPlus/pages/local_playlist/view.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -30,6 +31,12 @@ enum NavigationBarType implements EnumWithLabel {
     Icon(Icons.person_outline),
     Icon(Icons.person),
     MinePage(),
+  ),
+  playlist(
+    '播单',
+    Icon(Icons.playlist_play_outlined),
+    Icon(Icons.playlist_play),
+    LocalPlaylistPage(),
   ),
   ;
 

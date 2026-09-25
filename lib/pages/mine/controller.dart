@@ -52,7 +52,7 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
       title: '观看记录',
       onTap: () {
         if (isLogin) {
-          Get.toNamed('/history');
+          Get.toNamed('/localHistoryPage');
         }
       },
     ),
@@ -70,7 +70,7 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
       title: '稍后再看',
       onTap: () {
         if (isLogin) {
-          Get.toNamed('/later');
+          Get.toNamed('/localLaterPage');
         }
       },
     ),

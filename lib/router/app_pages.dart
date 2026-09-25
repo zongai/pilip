@@ -4,6 +4,8 @@ import 'package:PiliPlus/pages/audio/view.dart';
 import 'package:PiliPlus/pages/blacklist/view.dart';
 import 'package:PiliPlus/pages/local_blacklist/view.dart';
 import 'package:PiliPlus/pages/local_playlist/view.dart';
+import 'package:PiliPlus/pages/local_history/view.dart';
+import 'package:PiliPlus/pages/local_later/view.dart';
 import 'package:PiliPlus/pages/bubble/view.dart';
 import 'package:PiliPlus/pages/danmaku_block/view.dart';
 import 'package:PiliPlus/pages/dlna/view.dart';
@@ -114,6 +116,8 @@ class Routes {
     GetPage(name: '/blackListPage', page: () => const LocalBlackListPage()),
     GetPage(name: '/localBlackListPage', page: () => const LocalBlackListPage()),
     GetPage(name: '/localPlaylistPage', page: () => const LocalPlaylistPage()),
+    GetPage(name: '/localHistoryPage', page: () => const LocalHistoryPage()),
+    GetPage(name: '/localLaterPage', page: () => const LocalLaterPage()),
     GetPage(name: '/colorSetting', page: () => const ColorSelectPage()),
     GetPage(name: '/fontSetting', page: () => const FontSettingPage()),
     // 屏幕帧率
