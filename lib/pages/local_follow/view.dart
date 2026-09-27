@@ -36,16 +36,10 @@ class _LocalFollowPageState extends State<LocalFollowPage> {
     _refresh();
   }
 
-  void _openVideos(Map item) {
+  void _openMember(Map item) {
     final mid = item['mid'];
-    final name = (item['name'] as String?)?.trim();
-    // 通过搜索获取该 UP 相关视频
-    final keyword = (name != null && name.isNotEmpty) ? name : '$mid';
-    Get.toNamed(
-      '/searchResult',
-      parameters: {'keyword': keyword},
-      arguments: {'initIndex': 0},
-    );
+    if (mid == null) return;
+    Get.toNamed('/member?mid=$mid');
   }
 
   Future<void> _export() async {
@@ -97,7 +91,7 @@ class _LocalFollowPageState extends State<LocalFollowPage> {
                   Text('暂无关注', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text(
-                    '在用户主页或视频页点击关注即可添加\n点击列表项将通过搜索查看其视频',
+                    '在用户主页或视频页点击关注即可添加\n点击列表项进入该 UP 主页',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.outline,
@@ -124,8 +118,7 @@ class _LocalFollowPageState extends State<LocalFollowPage> {
                   ),
                   title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text('UID: $mid'),
-                  onTap: () => _openVideos(item),
-                  onLongPress: () => Get.toNamed('/member?mid=$mid'),
+                  onTap: () => _openMember(item),
                   trailing: IconButton(
                     tooltip: '取消关注',
                     icon: const Icon(Icons.person_remove_outlined),
