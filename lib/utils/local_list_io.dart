@@ -40,25 +40,16 @@ abstract final class LocalListIo {
   /// 返回解析出的 items；失败返回 null。items 可为 Map 或数字（黑名单 mid）
   static Future<List?> import({required String expectedType}) async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['json'],
-        withData: true,
       );
-      if (result == null || result.files.isEmpty) {
+      if (result == null) {
         SmartDialog.showToast('已取消');
         return null;
       }
-      final file = result.files.first;
-      Uint8List? bytes = file.bytes;
-      if (bytes == null && file.path != null) {
-        bytes = await File(file.path!).readAsBytes();
-      }
-      if (bytes == null) {
-        SmartDialog.showToast('无法读取文件');
-        return null;
-      }
-      final dynamic decoded = jsonDecode(utf8.decode(bytes));
+      final String data = await result.xFile.readAsString();
+      final dynamic decoded = jsonDecode(data);
       List rawItems;
       if (decoded is Map) {
         final t = decoded['type'];
