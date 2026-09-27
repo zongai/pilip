@@ -139,6 +139,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     if (isLogin) {
       queryAllStatus();
       queryFollowStatus();
+    } else {
+      // 未登录：用本地关注/黑名单状态
+      applyLocalRelationStatus(videoDetail.value.owner?.mid);
     }
   }
 
@@ -399,16 +402,43 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     );
   }
 
+  void applyLocalRelationStatus(int? mid) {
+    if (mid == null) return;
+    if (GlobalData().blackMids.contains(mid)) {
+      followStatus
+        ..value.attribute = 128
+        ..refresh();
+      return;
+    }
+    if (GlobalData().localFollowMids.contains(mid)) {
+      final attr = followStatus.value.attribute ?? 0;
+      if (attr == 0 || attr == -1) {
+        followStatus
+          ..value.attribute = 2
+          ..refresh();
+      }
+    }
+  }
+
   // 查询关注状态
   Future<void> queryFollowStatus() async {
     final videoDetail = this.videoDetail.value;
     if (videoDetail.owner == null || videoDetail.staff?.isNotEmpty == true) {
       return;
     }
-    final res = await UserHttp.userRelation(videoDetail.owner!.mid!);
+    final mid = videoDetail.owner!.mid!;
+    // 未登录或本地已关注时，直接用本地状态，不请求官方
+    if (!Accounts.main.isLogin || GlobalData().localFollowMids.contains(mid)) {
+      applyLocalRelationStatus(mid);
+      return;
+    }
+    final res = await UserHttp.userRelation(mid);
     if (res case Success(:final response)) {
       if (response.special == 1) response.attribute = -10;
       followStatus.value = response;
+      applyLocalRelationStatus(mid);
+    } else {
+      applyLocalRelationStatus(mid);
     }
   }
 

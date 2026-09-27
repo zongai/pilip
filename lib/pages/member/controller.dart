@@ -45,6 +45,17 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
     return relation != 0 && relation != 128 && relation != -1;
   }
 
+  /// 用于 UI：本地关注时显示「已关注」
+  int get displayRelation {
+    final r = relation.value;
+    if (GlobalData().blackMids.contains(mid) || r == 128) return 128;
+    if (GlobalData().localFollowMids.contains(mid) &&
+        (r == 0 || r == -1)) {
+      return 2;
+    }
+    return r;
+  }
+
   SpaceSetting? spaceSetting;
   List<SpaceTab2>? tab2;
   late List<Tab> tabs;
@@ -106,6 +117,15 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
                   ? -10
                   : card?.relation?.status ?? 2
             : data.relation ?? 0;
+    }
+    // 本地关注优先显示已关注
+    if (GlobalData().localFollowMids.contains(mid) &&
+        (relation.value == 0 || relation.value == -1) &&
+        !GlobalData().blackMids.contains(mid)) {
+      relation.value = 2;
+    }
+    if (GlobalData().blackMids.contains(mid)) {
+      relation.value = 128;
     }
     tab2 = data.tab2;
     live = data.live;
