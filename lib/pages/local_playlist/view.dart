@@ -50,23 +50,11 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
   }
 
   Future<void> _export() async {
-    await LocalListIo.export(
-      type: LocalListIo.playlistType,
-      fileName: 'pilip_playlists_${DateTime.now().millisecondsSinceEpoch}.json',
-      items: _list,
-    );
+    await LocalListIo.exportPlaylists();
   }
 
   Future<void> _import({bool replace = false}) async {
-    final items = await LocalListIo.import(expectedType: LocalListIo.playlistType);
-    if (items == null) return;
-    if (replace) {
-      Pref.replaceLocalPlaylists(items);
-      SmartDialog.showToast('已覆盖导入 ${items.length} 个播放列表');
-    } else {
-      Pref.mergeLocalPlaylists(items);
-      SmartDialog.showToast('已合并导入 ${items.length} 个播放列表');
-    }
+    await LocalListIo.importPlaylists(replace: replace);
     _refresh();
   }
 

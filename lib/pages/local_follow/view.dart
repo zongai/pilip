@@ -49,23 +49,11 @@ class _LocalFollowPageState extends State<LocalFollowPage> {
   }
 
   Future<void> _export() async {
-    await LocalListIo.export(
-      type: LocalListIo.followType,
-      fileName: 'pilip_follows_${DateTime.now().millisecondsSinceEpoch}.json',
-      items: _list,
-    );
+    await LocalListIo.exportFollows();
   }
 
   Future<void> _import({bool replace = false}) async {
-    final items = await LocalListIo.import(expectedType: LocalListIo.followType);
-    if (items == null) return;
-    if (replace) {
-      Pref.replaceLocalFollows(items);
-      SmartDialog.showToast('已覆盖导入 ${items.length} 条关注');
-    } else {
-      Pref.mergeLocalFollows(items);
-      SmartDialog.showToast('已合并导入 ${items.length} 条关注');
-    }
+    await LocalListIo.importFollows(replace: replace);
     _refresh();
   }
 

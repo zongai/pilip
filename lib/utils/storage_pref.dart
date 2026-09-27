@@ -84,6 +84,18 @@ abstract final class Pref {
     GlobalData().blackMids..remove(mid),
   );
 
+  static void replaceBlackMids(Set<int> mids) {
+    blackMids = mids;
+    GlobalData().blackMids
+      ..clear()
+      ..addAll(mids);
+  }
+
+  static void mergeBlackMids(Set<int> mids) {
+    final set = Set<int>.from(blackMids)..addAll(mids);
+    replaceBlackMids(set);
+  }
+
   /// 本地关注列表 [{mid, name, face}, ...]
   static List<Map> get localFollows {
     final raw = _localCache.get(LocalCacheKey.localFollows, defaultValue: <dynamic>[]);
@@ -295,6 +307,74 @@ abstract final class Pref {
     localLater = [];
     GlobalData().localLaterList = [];
   }
+
+  static void replaceLocalHistory(List<Map> list) {
+    // 最多 500
+    final trimmed = list.length > 500 ? list.sublist(0, 500) : list;
+    localHistory = trimmed;
+    GlobalData().localHistoryList = trimmed;
+  }
+
+  static void mergeLocalHistory(List<Map> incoming) {
+    final map = <String, Map>{};
+    for (final e in localHistory) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      map[key] = e;
+    }
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av') continue;
+      map[key] = {
+        ...?map[key],
+        ...e,
+      };
+    }
+    // 新导入优先靠前
+    final ordered = <Map>[];
+    final seen = <String>{};
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av' || !seen.add(key)) continue;
+      ordered.add(map[key]!);
+    }
+    for (final e in localHistory) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (seen.add(key)) ordered.add(e);
+    }
+    replaceLocalHistory(ordered);
+  }
+
+  static void replaceLocalLater(List<Map> list) {
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void mergeLocalLater(List<Map> incoming) {
+    final map = <String, Map>{};
+    for (final e in localLater) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      map[key] = e;
+    }
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av') continue;
+      map[key] = {...?map[key], ...e};
+    }
+    final ordered = <Map>[];
+    final seen = <String>{};
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av' || !seen.add(key)) continue;
+      ordered.add(map[key]!);
+    }
+    for (final e in localLater) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (seen.add(key)) ordered.add(e);
+    }
+    replaceLocalLater(ordered);
+  }
+
+
 
   static void replaceLocalFollows(List<Map> list) {
     localFollows = list;
