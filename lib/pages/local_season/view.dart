@@ -102,7 +102,7 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
                   leading: NetworkImgLayer(
                     width: 64,
                     height: 40,
-                    type: ImageType.video,
+                    type: ImageType.def,
                     src: cover,
                   ),
                   title: Text(
