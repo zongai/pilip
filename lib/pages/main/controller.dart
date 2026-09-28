@@ -230,9 +230,9 @@ class MainController extends GetxController
   void setNavBarConfig() {
     List<int>? navBarSort =
         (GStorage.setting.get(SettingBoxKey.navBarSort) as List?)?.fromCast();
-    late final List<NavigationBarType> navigationBars;
+    List<NavigationBarType> navigationBars;
     if (navBarSort == null || navBarSort.isEmpty) {
-      navigationBars = NavigationBarType.values;
+      navigationBars = NavigationBarType.values.toList();
     } else {
       navigationBars = [
         for (final i in navBarSort)
