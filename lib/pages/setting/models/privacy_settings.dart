@@ -25,6 +25,14 @@ List<SettingsModel> get privacySettings => [
   ),
   NormalModel(
     onTap: (context, setState) {
+      Get.toNamed('/localSeasonPage');
+    },
+    title: '合集收藏',
+    subtitle: '本地订阅合集，无需登录，可在此管理',
+    leading: const Icon(Icons.video_library_outlined),
+  ),
+  NormalModel(
+    onTap: (context, setState) {
       _showLocalDataIoSheet(context);
     },
     title: '本地数据导入导出',

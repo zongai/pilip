@@ -138,8 +138,61 @@ abstract final class Pref {
     GlobalData().localFollowList = list;
   }
 
+  /// 本地合集收藏 [{id, title, cover, mediaCount, mid, upperName}, ...]
+  static List<Map> get localSeasons {
+    final raw = _localCache.get(LocalCacheKey.localSeasons, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 
+  static set localSeasons(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localSeasons, list);
 
+  static bool isLocalSeasonFav(dynamic seasonId) {
+    if (seasonId == null) return false;
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return false;
+    return GlobalData().localSeasonIds.contains(id);
+  }
+
+  static void addLocalSeason({
+    required dynamic seasonId,
+    String? title,
+    String? cover,
+    int? mediaCount,
+    int? mid,
+    String? upperName,
+  }) {
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return;
+    final list = List<Map>.from(localSeasons);
+    final idx = list.indexWhere((e) => e['id'] == id);
+    final item = {
+      'id': id,
+      'title': title ?? (idx >= 0 ? list[idx]['title'] : null) ?? '',
+      'cover': cover ?? (idx >= 0 ? list[idx]['cover'] : null) ?? '',
+      'mediaCount': mediaCount ?? (idx >= 0 ? list[idx]['mediaCount'] : null) ?? 0,
+      'mid': mid ?? (idx >= 0 ? list[idx]['mid'] : null),
+      'upperName': upperName ?? (idx >= 0 ? list[idx]['upperName'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localSeasons = list;
+    GlobalData().localSeasonIds.add(id);
+    GlobalData().localSeasonList = list;
+  }
+
+  static void removeLocalSeason(dynamic seasonId) {
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return;
+    final list = List<Map>.from(localSeasons)..removeWhere((e) => e['id'] == id);
+    localSeasons = list;
+    GlobalData().localSeasonIds.remove(id);
+    GlobalData().localSeasonList = list;
+  }
 
   /// 本地播放列表收藏 [{mediaId, title, cover, mediaCount, upperName}, ...]
   static List<Map> get localPlaylists {

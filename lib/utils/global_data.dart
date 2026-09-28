@@ -14,21 +14,18 @@ class GlobalData {
   Set<int> blackMids = Pref.blackMids;
 
   List<Map> localFollowList = Pref.localFollows;
-  List<Map> localPlaylistList = Pref.localPlaylists;
-  Set<int> localPlaylistIds = {
-    for (final e in Pref.localPlaylists)
-      if (e['mediaId'] is int) e['mediaId'] as int
-      else int.tryParse('${e['mediaId']}') ?? 0,
-  }..remove(0);
-
   Set<int> localFollowMids = {
     for (final e in Pref.localFollows)
       if (e['mid'] is int) e['mid'] as int
       else int.tryParse('${e['mid']}') ?? 0,
   }..remove(0);
 
-  List<Map> localHistoryList = Pref.localHistory;
-  List<Map> localLaterList = Pref.localLater;
+  List<Map> localSeasonList = Pref.localSeasons;
+  Set<int> localSeasonIds = {
+    for (final e in Pref.localSeasons)
+      if (e['id'] is int) e['id'] as int
+      else int.tryParse('${e['id']}') ?? 0,
+  }..remove(0);
 
   bool dynamicsWaterfallFlow = Pref.dynamicsWaterfallFlow;
 

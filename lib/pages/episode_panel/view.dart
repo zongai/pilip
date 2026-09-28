@@ -11,9 +11,7 @@ import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
-import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/episode_panel_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
@@ -172,24 +170,16 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
     _isReversed = List.filled(widget.list.length, false);
 
-    if (widget.type == EpisodeType.season && Accounts.main.isLogin) {
+    // 本地合集收藏：无需登录，直接读本地
+    if (widget.type == EpisodeType.season) {
       final favState =
           widget.ugcIntroController?.seasonFavState[widget.seasonId];
       if (favState != null) {
         _favState = Success(favState).obs;
       } else {
-        _favState = LoadingState<bool>.loading().obs;
-        VideoHttp.videoRelation(bvid: widget.bvid).then(
-          (result) {
-            if (!mounted) return;
-            if (result case Success(:final response)) {
-              final seasonFav = response.seasonFav ?? false;
-              _favState!.value = Success(seasonFav);
-              widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                  seasonFav;
-            }
-          },
-        );
+        final localFav = Pref.isLocalSeasonFav(widget.seasonId);
+        _favState = Success(localFav).obs;
+        widget.ugcIntroController?.seasonFavState[widget.seasonId] = localFav;
       }
     }
   }
@@ -607,18 +597,33 @@ class _EpisodePanelState extends State<EpisodePanel>
             ? const Icon(Icons.notifications_off_outlined)
             : const Icon(Icons.notifications_active_outlined),
         onPressed: () async {
-          final res = await FavHttp.seasonFav(
-            isFav: response,
-            seasonId: widget.seasonId,
-          );
-          if (res.isSuccess) {
-            SmartDialog.showToast('${response ? '取消' : ''}订阅成功');
-            _favState!.value = Success(!response);
-            widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                !response;
+          // 本地合集收藏：只写本地，不请求官方、无需登录
+          if (response) {
+            Pref.removeLocalSeason(widget.seasonId);
+            SmartDialog.showToast('取消订阅成功');
           } else {
-            res.toast();
+            final ugcSeason =
+                widget.ugcIntroController?.videoDetail.value.ugcSeason;
+            int mediaCount = 0;
+            try {
+              for (final section in widget.list) {
+                final eps = (section as dynamic).episodes;
+                if (eps is List) mediaCount += eps.length as int;
+              }
+            } catch (_) {}
+            Pref.addLocalSeason(
+              seasonId: widget.seasonId,
+              title: ugcSeason?.title,
+              cover: widget.cover ?? ugcSeason?.cover,
+              mediaCount: mediaCount,
+              mid: ugcSeason?.mid,
+              upperName: '',
+            );
+            SmartDialog.showToast('订阅成功');
           }
+          _favState!.value = Success(!response);
+          widget.ugcIntroController?.seasonFavState[widget.seasonId] =
+              !response;
         },
       ),
       _ => const SizedBox.shrink(),
