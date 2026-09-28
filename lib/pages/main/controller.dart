@@ -234,9 +234,14 @@ class MainController extends GetxController
     if (navBarSort == null || navBarSort.isEmpty) {
       navigationBars = NavigationBarType.values;
     } else {
-      navigationBars = navBarSort
-          .map(NavigationBarType.values.elementAt)
-          .toList();
+      navigationBars = [
+        for (final i in navBarSort)
+          if (i >= 0 && i < NavigationBarType.values.length)
+            NavigationBarType.values[i],
+      ];
+      if (navigationBars.isEmpty) {
+        navigationBars = NavigationBarType.values.toList();
+      }
     }
     this.navigationBars = navigationBars;
     final defPage = Pref.defaultHomePage;
