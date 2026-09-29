@@ -30,8 +30,13 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
 
   SearchVideoData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
+    final blackMids = GlobalData().blackMids;
     list = (json['result'] as List?)
         ?.map<SearchVideoItemModel>((e) => SearchVideoItemModel.fromJson(e))
+        .where((e) {
+          final mid = e.owner?.mid;
+          return mid == null || !blackMids.contains(mid);
+        })
         .toList();
   }
 
@@ -46,8 +51,13 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
       for (final item in result) {
         switch (item['result_type']) {
           case 'video':
+            final blackMids = GlobalData().blackMids;
             list = (item['data'] as List?)
                 ?.map((e) => SearchVideoItemModel.fromJson(e))
+                .where((e) {
+                  final mid = e.owner?.mid;
+                  return mid == null || !blackMids.contains(mid);
+                })
                 .toList();
           case 'bili_user':
             if (item['data'] case List users when users.isNotEmpty) {
@@ -252,8 +262,10 @@ class SearchUserData extends SearchNumData<SearchUserItemModel> {
 
   SearchUserData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
+    final blackMids = GlobalData().blackMids;
     list = (json['result'] as List?)
         ?.map<SearchUserItemModel>((e) => SearchUserItemModel.fromJson(e))
+        .where((e) => e.mid == null || !blackMids.contains(e.mid))
         .toList();
   }
 }
@@ -328,8 +340,10 @@ class SearchLiveData extends SearchNumData<SearchLiveItemModel> {
 
   SearchLiveData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
-    list = json['result']
+    final blackMids = GlobalData().blackMids;
+    list = (json['result'] as List?)
         ?.map<SearchLiveItemModel>((e) => SearchLiveItemModel.fromJson(e))
+        .where((e) => e.uid == null || !blackMids.contains(e.uid))
         .toList();
   }
 }
