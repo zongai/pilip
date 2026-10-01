@@ -9,6 +9,7 @@ import 'package:PiliPlus/utils/em.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/parse_int.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
@@ -30,7 +31,7 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
 
   SearchVideoData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
-    final blackMids = GlobalData().blackMids;
+    final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
     list = (json['result'] as List?)
         ?.map<SearchVideoItemModel>((e) => SearchVideoItemModel.fromJson(e))
         .where((e) {
@@ -51,7 +52,7 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
       for (final item in result) {
         switch (item['result_type']) {
           case 'video':
-            final blackMids = GlobalData().blackMids;
+            final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
             list = (item['data'] as List?)
                 ?.map((e) => SearchVideoItemModel.fromJson(e))
                 .where((e) {
@@ -62,7 +63,7 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
           case 'bili_user':
             if (item['data'] case List users when users.isNotEmpty) {
               for (final e in users) {
-                if (!GlobalData().blackMids.contains(e['mid'])) {
+                if (!(Pref.enableLocalFeatures && GlobalData().blackMids.contains(e['mid']))) {
                   (searchUser ??= <SearchUser>[]).add(SearchUser.fromJson(e));
                 }
               }
@@ -262,7 +263,7 @@ class SearchUserData extends SearchNumData<SearchUserItemModel> {
 
   SearchUserData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
-    final blackMids = GlobalData().blackMids;
+    final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
     list = (json['result'] as List?)
         ?.map<SearchUserItemModel>((e) => SearchUserItemModel.fromJson(e))
         .where((e) => e.mid == null || !blackMids.contains(e.mid))
@@ -340,7 +341,7 @@ class SearchLiveData extends SearchNumData<SearchLiveItemModel> {
 
   SearchLiveData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
-    final blackMids = GlobalData().blackMids;
+    final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
     list = (json['result'] as List?)
         ?.map<SearchLiveItemModel>((e) => SearchLiveItemModel.fromJson(e))
         .where((e) => e.uid == null || !blackMids.contains(e.uid))
