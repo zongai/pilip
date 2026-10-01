@@ -28,6 +28,8 @@ class GlobalData {
   }..remove(0);
 
   List<Map> localSeasonList = Pref.localSeasons;
+  bool get enableLocalFeatures => Pref.enableLocalFeatures;
+
   Set<int> localSeasonIds = {
     for (final e in Pref.localSeasons)
       if (e['id'] is int) e['id'] as int
