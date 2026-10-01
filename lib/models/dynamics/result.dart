@@ -80,7 +80,7 @@ class DynamicsDataModel {
           }
         }
         final authorMid = item.modules.moduleAuthor?.mid;
-        if (authorMid != null && GlobalData().blackMids.contains(authorMid)) {
+        if (authorMid != null && Pref.enableLocalFeatures && GlobalData().blackMids.contains(authorMid)) {
           continue;
         }
         if (filterBan &&
