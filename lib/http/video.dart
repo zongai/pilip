@@ -181,7 +181,8 @@ abstract final class VideoHttp {
             !RecommendFilter.filterLikeRatio(
               i['stat']['like'],
               i['stat']['view'],
-            )) {
+            ) &&
+            !_tooShort(i['duration'])) {
           if (enableFilter &&
               i['tname'] != null &&
               zoneRegExp.hasMatch(i['tname'])) {
@@ -865,13 +866,45 @@ abstract final class VideoHttp {
     return null;
   }
 
+
+  /// duration 为秒；minDurationForRcmd>0 时过滤短于阈值的视频
+  static bool _tooShort(dynamic duration) {
+    final min = RecommendFilter.minDurationForRcmd;
+    if (min <= 0) return false;
+    int sec = 0;
+    if (duration is int) {
+      sec = duration;
+    } else if (duration is num) {
+      sec = duration.toInt();
+    } else if (duration is String) {
+      if (duration.contains(':')) {
+        final parts = duration.split(':');
+        try {
+          if (parts.length == 2) {
+            sec = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+          } else if (parts.length == 3) {
+            sec = int.parse(parts[0]) * 3600 +
+                int.parse(parts[1]) * 60 +
+                int.parse(parts[2]);
+          }
+        } catch (_) {
+          sec = 0;
+        }
+      } else {
+        sec = int.tryParse(duration) ?? 0;
+      }
+    }
+    return sec > 0 && sec < min;
+  }
+
   static bool _canAddRank(Map i) {
     if (!(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid'])) &&
         !RecommendFilter.filterTitle(i['title']) &&
         !RecommendFilter.filterLikeRatio(
           i['stat']['like'],
           i['stat']['view'],
-        )) {
+        ) &&
+        !_tooShort(i['duration'])) {
       if (enableFilter &&
           i['tname'] != null &&
           zoneRegExp.hasMatch(i['tname'])) {
