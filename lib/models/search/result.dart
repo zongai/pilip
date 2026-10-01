@@ -32,11 +32,17 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
   SearchVideoData.fromJson(Map<String, dynamic> json) {
     numResults = (json['numResults'] as num?)?.toInt();
     final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
+    final minDur = Pref.minDurationForRcmd;
     list = (json['result'] as List?)
         ?.map<SearchVideoItemModel>((e) => SearchVideoItemModel.fromJson(e))
         .where((e) {
           final mid = e.owner?.mid;
-          return mid == null || !blackMids.contains(mid);
+          if (mid != null && blackMids.contains(mid)) return false;
+          if (minDur > 0) {
+            final sec = e.duration > 0 ? e.duration : 0;
+            if (sec > 0 && sec < minDur) return false;
+          }
+          return true;
         })
         .toList();
   }
@@ -53,11 +59,17 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
         switch (item['result_type']) {
           case 'video':
             final blackMids = Pref.enableLocalFeatures ? GlobalData().blackMids : const <int>{};
+            final minDur = Pref.minDurationForRcmd;
             list = (item['data'] as List?)
                 ?.map((e) => SearchVideoItemModel.fromJson(e))
                 .where((e) {
                   final mid = e.owner?.mid;
-                  return mid == null || !blackMids.contains(mid);
+                  if (mid != null && blackMids.contains(mid)) return false;
+                  if (minDur > 0) {
+                    final sec = e.duration > 0 ? e.duration : 0;
+                    if (sec > 0 && sec < minDur) return false;
+                  }
+                  return true;
                 })
                 .toList();
           case 'bili_user':
