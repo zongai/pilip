@@ -7,39 +7,49 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 List<SettingsModel> get privacySettings => [
-  NormalModel(
-    onTap: (context, setState) {
-      Get.toNamed('/localBlackListPage');
-    },
-    title: '黑名单管理',
-    subtitle: '本地屏蔽UP主，相关内容自动隐藏（无需登录）',
-    leading: const Icon(Icons.block),
+  SwitchModel(
+    title: '启用本地功能',
+    subtitle: '开启后使用本地关注/黑名单/合集等；关闭后界面恢复原始样式并显示动态页（需重启）',
+    leading: const Icon(Icons.phone_android_outlined),
+    setKey: SettingBoxKey.enableLocalFeatures,
+    defaultVal: true,
+    needReboot: true,
   ),
-  NormalModel(
-    onTap: (context, setState) {
-      Get.toNamed('/localFollowPage');
-    },
-    title: '本地关注',
-    subtitle: '无需登录的关注列表',
-    leading: const Icon(Icons.favorite_border),
-  ),
-  NormalModel(
-    onTap: (context, setState) {
-      Get.toNamed('/localSeasonPage');
-    },
-    title: '合集收藏',
-    subtitle: '本地订阅合集，无需登录，可在此管理',
-    leading: const Icon(Icons.video_library_outlined),
-  ),
-  NormalModel(
-    onTap: (context, setState) {
-      _showLocalDataIoSheet(context);
-    },
-    title: '本地数据导入导出',
-    subtitle:
-        '关注 · 黑名单 · 播单 · 历史 · 稍后再看（JSON 备份）',
-    leading: const Icon(Icons.import_export),
-  ),
+  if (Pref.enableLocalFeatures) ...[
+    NormalModel(
+      onTap: (context, setState) {
+        Get.toNamed('/localBlackListPage');
+      },
+      title: '黑名单管理',
+      subtitle: '本地屏蔽UP主，相关内容自动隐藏（无需登录）',
+      leading: const Icon(Icons.block),
+    ),
+    NormalModel(
+      onTap: (context, setState) {
+        Get.toNamed('/localFollowPage');
+      },
+      title: '本地关注',
+      subtitle: '无需登录的关注列表',
+      leading: const Icon(Icons.favorite_border),
+    ),
+    NormalModel(
+      onTap: (context, setState) {
+        Get.toNamed('/localSeasonPage');
+      },
+      title: '合集收藏',
+      subtitle: '本地订阅合集，无需登录，可在此管理',
+      leading: const Icon(Icons.video_library_outlined),
+    ),
+    NormalModel(
+      onTap: (context, setState) {
+        _showLocalDataIoSheet(context);
+      },
+      title: '本地数据导入导出',
+      subtitle:
+          '关注 · 黑名单 · 播单 · 历史 · 稍后再看（JSON 备份）',
+      leading: const Icon(Icons.import_export),
+    ),
+  ],
   NormalModel(
     onTap: (context, setState) {
       showDialog(
