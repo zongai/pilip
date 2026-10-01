@@ -170,8 +170,8 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
     _isReversed = List.filled(widget.list.length, false);
 
-    // 本地合集收藏：无需登录，直接读本地
-    if (widget.type == EpisodeType.season) {
+    // 本地合集收藏：仅在启用本地功能时，无需登录直接读本地
+    if (Pref.enableLocalFeatures && widget.type == EpisodeType.season) {
       final favState =
           widget.ugcIntroController?.seasonFavState[widget.seasonId];
       if (favState != null) {
@@ -597,6 +597,7 @@ class _EpisodePanelState extends State<EpisodePanel>
             ? const Icon(Icons.notifications_off_outlined)
             : const Icon(Icons.notifications_active_outlined),
         onPressed: () async {
+          if (!Pref.enableLocalFeatures) return;
           // 本地合集收藏：只写本地，不请求官方、无需登录
           if (response) {
             Pref.removeLocalSeason(widget.seasonId);
