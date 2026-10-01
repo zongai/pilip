@@ -97,6 +97,13 @@ abstract final class Pref {
   }
 
   /// 本地关注列表 [{mid, name, face}, ...]
+  /// 本地功能总开关：关闭时界面保持原始样式（显示动态、隐藏本地关注/合集等）
+  static bool get enableLocalFeatures =>
+      _setting.get(SettingBoxKey.enableLocalFeatures, defaultValue: true);
+
+  static set enableLocalFeatures(bool v) =>
+      _setting.put(SettingBoxKey.enableLocalFeatures, v);
+
   static List<Map> get localFollows {
     final raw = _localCache.get(LocalCacheKey.localFollows, defaultValue: <dynamic>[]);
     if (raw is! List) return <Map>[];
