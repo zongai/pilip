@@ -72,10 +72,11 @@ List<SettingsModel> get recommendSettings => [
     },
   ),
   getVideoFilterSelectModel(
-    title: '视频时长',
+    title: '最短时长（隐藏短视频）',
+    subtitle: '隐藏短于该时长的视频；选 120s 即隐藏不足 2 分钟的内容，0 为关闭。支持自定义秒数',
     suffix: 's',
     key: SettingBoxKey.minDurationForRcmd,
-    values: [0, 30, 60, 90, 120],
+    values: [0, 30, 60, 90, 120, 180, 300, 600],
     onChanged: (value) => RecommendFilter.minDurationForRcmd = value,
   ),
   getVideoFilterSelectModel(
