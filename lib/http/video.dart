@@ -72,7 +72,7 @@ abstract final class VideoHttp {
         //过滤掉live与ad，以及拉黑用户
         if (i['goto'] == 'av' &&
             (i['owner'] != null &&
-                !GlobalData().blackMids.contains(i['owner']['mid']))) {
+                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid']))) {
           RcmdVideoItemModel videoItem = RcmdVideoItemModel.fromJson(i);
           if (!RecommendFilter.filter(videoItem)) {
             list.add(videoItem);
@@ -146,7 +146,7 @@ abstract final class VideoHttp {
             i['ad_info'] == null &&
             i['can_play'] == 1 &&
             (i['args'] != null &&
-                !GlobalData().blackMids.contains(i['args']['up_id']))) {
+                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['args']['up_id']))) {
           if (enableFilter &&
               i['args']?['tname'] != null &&
               zoneRegExp.hasMatch(i['args']['tname'])) {
@@ -176,7 +176,7 @@ abstract final class VideoHttp {
     if (res.data['code'] == 0) {
       List<HotVideoItemModel> list = <HotVideoItemModel>[];
       for (final i in res.data['data']['list']) {
-        if (!GlobalData().blackMids.contains(i['owner']['mid']) &&
+        if (!(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid'])) &&
             !RecommendFilter.filterTitle(i['title']) &&
             !RecommendFilter.filterLikeRatio(
               i['stat']['like'],
@@ -612,24 +612,24 @@ abstract final class VideoHttp {
     required int act,
     required int reSrc,
   }) async {
-    // 关注 / 取消关注 / 黑名单：全部走本地，不请求官方、无需登录
-    if (act == 1) {
-      // 关注
-      Pref.addLocalFollow(mid: mid);
-      return const Success(null);
-    }
-    if (act == 2) {
-      // 取消关注
-      Pref.removeLocalFollow(mid);
-      return const Success(null);
-    }
-    if (act == 5) {
-      Pref.setBlackMid(mid);
-      return const Success(null);
-    }
-    if (act == 6) {
-      Pref.removeBlackMid(mid);
-      return const Success(null);
+    // 启用本地功能时：关注 / 取消关注 / 黑名单 走本地，不请求官方、无需登录
+    if (Pref.enableLocalFeatures) {
+      if (act == 1) {
+        Pref.addLocalFollow(mid: mid);
+        return const Success(null);
+      }
+      if (act == 2) {
+        Pref.removeLocalFollow(mid);
+        return const Success(null);
+      }
+      if (act == 5) {
+        Pref.setBlackMid(mid);
+        return const Success(null);
+      }
+      if (act == 6) {
+        Pref.removeBlackMid(mid);
+        return const Success(null);
+      }
     }
 
     final res = await Request().post(
@@ -866,7 +866,7 @@ abstract final class VideoHttp {
   }
 
   static bool _canAddRank(Map i) {
-    if (!GlobalData().blackMids.contains(i['owner']['mid']) &&
+    if (!(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid'])) &&
         !RecommendFilter.filterTitle(i['title']) &&
         !RecommendFilter.filterLikeRatio(
           i['stat']['like'],
