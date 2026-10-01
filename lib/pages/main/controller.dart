@@ -243,9 +243,29 @@ class MainController extends GetxController
         navigationBars = NavigationBarType.values.toList();
       }
     }
+    // 本地功能开关：开启时隐藏动态页、显示本地关注/合集；关闭时恢复原始（显示动态、隐藏本地页）
+    if (Pref.enableLocalFeatures) {
+      navigationBars = [
+        for (final e in navigationBars)
+          if (e != NavigationBarType.dynamics) e,
+      ];
+    } else {
+      navigationBars = [
+        for (final e in navigationBars)
+          if (e != NavigationBarType.follow && e != NavigationBarType.season) e,
+      ];
+    }
+    if (navigationBars.isEmpty) {
+      navigationBars = [
+        NavigationBarType.home,
+        if (!Pref.enableLocalFeatures) NavigationBarType.dynamics,
+        NavigationBarType.mine,
+      ];
+    }
     this.navigationBars = navigationBars;
     final defPage = Pref.defaultHomePage;
-    selectedIndex.value = math.max(0, navigationBars.indexOf(defPage));
+    final idx = navigationBars.indexOf(defPage);
+    selectedIndex.value = math.max(0, idx >= 0 ? idx : 0);
   }
 
   void checkDefaultSearch([bool shouldCheck = false]) {
