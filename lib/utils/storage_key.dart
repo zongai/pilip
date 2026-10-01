@@ -245,6 +245,7 @@ abstract final class SettingBoxKey {
 
 abstract final class LocalCacheKey {
   static const String historyPause = 'historyPause',
+      enableLocalFeatures = 'enableLocalFeatures',
       blackMids = 'blackMids',
       localFollows = 'localFollows',
       localSeasons = 'localSeasons',
