@@ -6,6 +6,8 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
+import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 本地稍后再看（无需登录）
@@ -17,6 +19,8 @@ class LocalLaterPage extends StatefulWidget {
 }
 
 class _LocalLaterPageState extends State<LocalLaterPage> {
+  final ScrollController _scrollController = ScrollController();
+
   late List<Map> _list;
 
   @override
@@ -62,9 +66,20 @@ class _LocalLaterPageState extends State<LocalLaterPage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      floatingActionButton: ScrollToTopButton(
+              controller: _scrollController,
+              onPressed: _scrollController.animToTop,
+              heroTag: 'local_later_scroll_to_top',
+            ),
       appBar: AppBar(
         title: Text('本地稍后再看${_list.isEmpty ? '' : ' · ${_list.length}'}'),
         actions: [
@@ -90,6 +105,7 @@ class _LocalLaterPageState extends State<LocalLaterPage> {
               ),
             )
           : ListView.builder(
+              controller: _scrollController,
               itemCount: _list.length,
               itemBuilder: (context, index) {
                 final item = _list[index];

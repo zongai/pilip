@@ -5,6 +5,8 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
+import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 本地播放列表收藏（无需登录）
@@ -16,6 +18,8 @@ class LocalPlaylistPage extends StatefulWidget {
 }
 
 class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
+  final ScrollController _scrollController = ScrollController();
+
   late List<Map> _list;
 
   @override
@@ -59,9 +63,20 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      floatingActionButton: ScrollToTopButton(
+              controller: _scrollController,
+              onPressed: _scrollController.animToTop,
+              heroTag: 'local_playlist_scroll_to_top',
+            ),
       appBar: AppBar(
         title: Text(
           '本地播放列表${_list.isEmpty ? '' : ' · ${_list.length}'}',
@@ -110,6 +125,7 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
               ),
             )
           : ListView.builder(
+              controller: _scrollController,
               itemCount: _list.length,
               itemBuilder: (context, index) {
                 final item = _list[index];

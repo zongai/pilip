@@ -3,6 +3,8 @@ import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
+import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 黑名单管理（无需登录）
@@ -14,6 +16,8 @@ class LocalBlackListPage extends StatefulWidget {
 }
 
 class _LocalBlackListPageState extends State<LocalBlackListPage> {
+  final ScrollController _scrollController = ScrollController();
+
   late List<int> _mids;
 
   @override
@@ -35,9 +39,20 @@ class _LocalBlackListPageState extends State<LocalBlackListPage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      floatingActionButton: ScrollToTopButton(
+              controller: _scrollController,
+              onPressed: _scrollController.animToTop,
+              heroTag: 'local_blacklist_scroll_to_top',
+            ),
       appBar: AppBar(
         title: Text('黑名单管理${_mids.isEmpty ? '' : ': ${_mids.length}'}'),
         actions: [
@@ -89,6 +104,7 @@ class _LocalBlackListPageState extends State<LocalBlackListPage> {
               ),
             )
           : ListView.builder(
+              controller: _scrollController,
               itemCount: _mids.length,
               itemBuilder: (context, index) {
                 final mid = _mids[index];

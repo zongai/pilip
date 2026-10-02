@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
@@ -205,6 +206,20 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
       drawer: drawer,
       endDrawer: endDrawer,
       body: onBuild(child),
+      floatingActionButton: ListenableBuilder(
+        listenable: _dynamicsController.tabController,
+        builder: (context, _) {
+          final tabCtr = _dynamicsController.controller;
+          final sc = tabCtr?.scrollController ??
+              _dynamicsController.scrollController;
+          return ScrollToTopButton(
+            key: ValueKey(_dynamicsController.tabController.index),
+            controller: sc,
+            onPressed: _dynamicsController.animateToTop,
+            heroTag: 'dyn_scroll_to_top',
+          );
+        },
+      ),
     );
   }
 }

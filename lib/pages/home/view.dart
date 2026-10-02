@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
@@ -75,18 +76,37 @@ class _HomePageState extends CommonPageState<HomePage>
     } else {
       tabBar = const SizedBox(height: 6);
     }
-    return Column(
+    return Stack(
       children: [
-        if (!_mainController.useSideBar &&
-            MediaQuery.sizeOf(context).isPortrait)
-          customAppBar(),
-        tabBar,
-        Expanded(
-          child: onBuild(
-            tabBarView(
-              controller: _homeController.tabController,
-              children: _homeController.tabs.map((e) => e.page).toList(),
+        Column(
+          children: [
+            if (!_mainController.useSideBar &&
+                MediaQuery.sizeOf(context).isPortrait)
+              customAppBar(),
+            tabBar,
+            Expanded(
+              child: onBuild(
+                tabBarView(
+                  controller: _homeController.tabController,
+                  children: _homeController.tabs.map((e) => e.page).toList(),
+                ),
+              ),
             ),
+          ],
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: ListenableBuilder(
+            listenable: _homeController.tabController,
+            builder: (context, _) {
+              return ScrollToTopButton(
+                key: ValueKey(_homeController.tabController.index),
+                controller: _homeController.scrollController,
+                onPressed: _homeController.animateToTop,
+                heroTag: 'home_scroll_to_top',
+              );
+            },
           ),
         ),
       ],
