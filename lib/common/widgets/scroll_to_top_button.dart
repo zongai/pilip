@@ -1,10 +1,15 @@
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
+import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:material_ui/material_ui.dart';
 
+const double _kBtnSize = 44;
+
 /// 列表下滑后显示的「快速返回顶部」按钮（桌面 / 移动端通用）。
+///
+/// 注意：在 Stack/Positioned 中必须限制自身尺寸，否则 Material 会被撑满全屏，
+/// 形成半透明遮罩挡住底层手势（iOS 上尤为明显）。
 class ScrollToTopButton extends StatefulWidget {
   const ScrollToTopButton({
     super.key,
@@ -12,13 +17,11 @@ class ScrollToTopButton extends StatefulWidget {
     this.threshold,
     this.onPressed,
     this.heroTag,
-    /// 额外上移，避开底部导航等（逻辑像素）
     this.extraBottom = 0,
     this.extraRight = 0,
   });
 
   final ScrollController controller;
-  /// 触发显示的滚动阈值；为 null 时移动端更灵敏（约 240），桌面约 400
   final double? threshold;
   final VoidCallback? onPressed;
   final Object? heroTag;
@@ -34,7 +37,6 @@ class _ScrollToTopButtonState extends State<ScrollToTopButton> {
 
   double get _threshold {
     if (widget.threshold != null) return widget.threshold!;
-    // 移动端屏幕较短，更早出现按钮
     final size = MediaQuery.sizeOf(context);
     return size.shortestSide < 600 ? 240.0 : 400.0;
   }
@@ -85,38 +87,33 @@ class _ScrollToTopButtonState extends State<ScrollToTopButton> {
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.paddingOf(context);
-    // 移动端抬高，避免被系统手势条 / 底部导航挡住
     final bottomPad = 12.0 + padding.bottom + widget.extraBottom;
     final rightPad = 12.0 + padding.right + widget.extraRight;
+    final scheme = Theme.of(context).colorScheme;
+
+    // 未显示时完全不参与布局与点击，避免遮挡
+    if (!_visible) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
       padding: EdgeInsets.only(right: rightPad, bottom: bottomPad),
-      child: IgnorePointer(
-        ignoring: !_visible,
-        child: AnimatedOpacity(
-          opacity: _visible ? 1 : 0,
-          duration: const Duration(milliseconds: 180),
-          child: AnimatedScale(
-            scale: _visible ? 1 : 0.85,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: Material(
-              elevation: _visible ? 4 : 0,
-              shadowColor: Colors.black45,
-              shape: const CircleBorder(),
-              color: Theme.of(context).colorScheme.primaryContainer,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: _visible ? _handleTap : null,
-                child: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: Icon(
-                    Icons.vertical_align_top,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
+      // 关键尺寸，防止在 Stack 松约束下被撑满全屏
+      child: SizedBox(
+        width: _kBtnSize,
+        height: _kBtnSize,
+        child: Material(
+          elevation: 4,
+          shadowColor: Colors.black45,
+          shape: const CircleBorder(),
+          color: scheme.primaryContainer,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: _handleTap,
+            child: Icon(
+              Icons.vertical_align_top,
+              color: scheme.onPrimaryContainer,
             ),
           ),
         ),
@@ -151,6 +148,7 @@ class ScrollToTopOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.passthrough,
       clipBehavior: Clip.none,
       children: [
         child,
@@ -175,7 +173,6 @@ class ScrollToTopOverlay extends StatelessWidget {
 double mainNavExtraBottom(BuildContext context) {
   if (Pref.useSideBar) return 0;
   final size = MediaQuery.sizeOf(context);
-  // 竖屏移动端底部导航约 64–80
   if (size.isPortrait && size.shortestSide < 600) {
     return 72;
   }
