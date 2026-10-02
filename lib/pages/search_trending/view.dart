@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/sliver/trending_header.dart';
@@ -53,6 +54,7 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                 child: refreshIndicator(
                   onRefresh: _controller.onRefresh,
                   child: CustomScrollView(
+                    controller: _controller.scrollController,
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       TrendingHeader(
@@ -118,6 +120,14 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                       : null,
                 );
               },
+            ),
+          ),
+          Positioned(
+            right: 16 + padding.right,
+            bottom: 16 + padding.bottom,
+            child: ScrollToTopButton(
+              controller: _controller.scrollController,
+              heroTag: 'search_trending_scroll_to_top',
             ),
           ),
         ],
