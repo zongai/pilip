@@ -82,6 +82,7 @@ class _MediaPageState extends CommonPageState<MinePage>
             child: ScrollToTopOverlay(
       controller: controller.scrollController,
       heroTag: 'mine_view_top',
+      extraBottom: mainNavExtraBottom(context),
       child: refreshIndicator(
               onRefresh: controller.onRefresh,
               child: onBuild(

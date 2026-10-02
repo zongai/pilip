@@ -217,9 +217,11 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
             controller: sc,
             onPressed: _dynamicsController.animateToTop,
             heroTag: 'dyn_scroll_to_top',
+            extraBottom: mainNavExtraBottom(context),
           );
         },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }

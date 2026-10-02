@@ -65,11 +65,14 @@ class _LocalFollowPageState extends State<LocalFollowPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      floatingActionButton: ScrollToTopButton(
+      floatingActionButton: Builder(
+        builder: (context) => ScrollToTopButton(
               controller: _scrollController,
               onPressed: _scrollController.animToTop,
               heroTag: 'local_follow_scroll_to_top',
+              extraBottom: mainNavExtraBottom(context),
             ),
+      ),
       appBar: AppBar(
         title: Text('关注${_list.isEmpty ? '' : ' · ${_list.length}'}'),
         actions: [

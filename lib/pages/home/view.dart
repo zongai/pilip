@@ -95,8 +95,8 @@ class _HomePageState extends CommonPageState<HomePage>
           ],
         ),
         Positioned(
-          right: 16,
-          bottom: 16,
+          right: 0,
+          bottom: 0,
           child: ListenableBuilder(
             listenable: _homeController.tabController,
             builder: (context, _) {
@@ -105,6 +105,7 @@ class _HomePageState extends CommonPageState<HomePage>
                 controller: _homeController.scrollController,
                 onPressed: _homeController.animateToTop,
                 heroTag: 'home_scroll_to_top',
+                extraBottom: mainNavExtraBottom(context),
               );
             },
           ),

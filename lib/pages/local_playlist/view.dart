@@ -72,11 +72,14 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      floatingActionButton: ScrollToTopButton(
+      floatingActionButton: Builder(
+        builder: (context) => ScrollToTopButton(
               controller: _scrollController,
               onPressed: _scrollController.animToTop,
               heroTag: 'local_playlist_scroll_to_top',
+              extraBottom: mainNavExtraBottom(context),
             ),
+      ),
       appBar: AppBar(
         title: Text(
           '本地播放列表${_list.isEmpty ? '' : ' · ${_list.length}'}',
