@@ -95,6 +95,7 @@ class _HistoryPageState extends State<HistoryPage>
             }
           },
           child: SimpleScaffold(
+      primaryScrollController: _historyController.scrollController,
             fab: ScrollToTopButton(controller: _historyController.scrollController, heroTag: 'history_view_top'),
       appBar: MultiSelectAppBarWidget(
               visible: enableMultiSelect,

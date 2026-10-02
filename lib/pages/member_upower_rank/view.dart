@@ -89,6 +89,7 @@ class _UpowerRankPageState extends State<UpowerRankPage>
     );
     if (widget.privilegeType == null) {
       return SimpleScaffold(
+      primaryScrollController: _controller.scrollController,
         fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'member_upower_rank_view_top'),
       appBar: AppBar(
           title: Text('$_name的充电排行榜${_count == null ? '' : '($_count)'}'),

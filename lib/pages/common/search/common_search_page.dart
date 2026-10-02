@@ -40,6 +40,7 @@ abstract class CommonSearchPageState<S extends StatefulWidget, R, T>
 
   Widget _build(bool multiSelect) {
     return SimpleScaffold(
+      primaryScrollController: controller.scrollController,
       appBar: _buildBar(multiSelect),
       fab: ScrollToTopButton(
         controller: controller.scrollController,

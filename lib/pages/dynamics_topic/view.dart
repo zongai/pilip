@@ -62,6 +62,7 @@ class _DynTopicPageState extends State<DynTopicPage>
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
+      primaryScrollController: _controller.scrollController,
       body: refreshIndicator(
         onRefresh: _controller.onRefresh,
         child: fabAnimWrapper(

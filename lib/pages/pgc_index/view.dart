@@ -48,6 +48,7 @@ class _PgcIndexPageState extends State<PgcIndexPage>
     final theme = Theme.of(context);
     return widget.indexType == null
         ? SimpleScaffold(
+      primaryScrollController: _ctr.scrollController,
             fab: ScrollToTopButton(controller: _ctr.scrollController, heroTag: 'pgc_index_view_top'),
       appBar: AppBar(title: const Text('索引')),
             body: Obx(() => _buildBody(theme, _ctr.conditionState.value)),

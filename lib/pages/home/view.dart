@@ -76,41 +76,46 @@ class _HomePageState extends CommonPageState<HomePage>
     } else {
       tabBar = const SizedBox(height: 6);
     }
-    return Stack(
-      children: [
-        Column(
-          children: [
-            if (!_mainController.useSideBar &&
-                MediaQuery.sizeOf(context).isPortrait)
-              customAppBar(),
-            tabBar,
-            Expanded(
-              child: onBuild(
-                tabBarView(
-                  controller: _homeController.tabController,
-                  children: _homeController.tabs.map((e) => e.page).toList(),
+    return ListenableBuilder(
+      listenable: _homeController.tabController,
+      builder: (context, _) {
+        final sc = _homeController.scrollController;
+        return PrimaryScrollController(
+          controller: sc,
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  if (!_mainController.useSideBar &&
+                      MediaQuery.sizeOf(context).isPortrait)
+                    customAppBar(),
+                  tabBar,
+                  Expanded(
+                    child: onBuild(
+                      tabBarView(
+                        controller: _homeController.tabController,
+                        children:
+                            _homeController.tabs.map((e) => e.page).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: ScrollToTopButton(
+                  key: ValueKey(_homeController.tabController.index),
+                  controller: sc,
+                  onPressed: _homeController.animateToTop,
+                  heroTag: 'home_scroll_to_top',
+                  extraBottom: mainNavExtraBottom(context),
                 ),
               ),
-            ),
-          ],
-        ),
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: ListenableBuilder(
-            listenable: _homeController.tabController,
-            builder: (context, _) {
-              return ScrollToTopButton(
-                key: ValueKey(_homeController.tabController.index),
-                controller: _homeController.scrollController,
-                onPressed: _homeController.animateToTop,
-                heroTag: 'home_scroll_to_top',
-                extraBottom: mainNavExtraBottom(context),
-              );
-            },
+            ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 

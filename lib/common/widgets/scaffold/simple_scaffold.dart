@@ -11,15 +11,23 @@ class SimpleScaffold extends StatelessWidget {
     this.fab,
     this.appBar,
     required this.body,
+    /// iOS 点击状态栏回到顶部：将此 controller 注册为 PrimaryScrollController
+    this.primaryScrollController,
   });
 
   final Color? backgroundColor;
   final Widget? fab;
   final Widget? appBar;
   final Widget body;
+  final ScrollController? primaryScrollController;
 
   @override
   Widget build(BuildContext context) {
+    Widget body = this.body;
+    final psc = primaryScrollController;
+    if (psc != null) {
+      body = PrimaryScrollController(controller: psc, child: body);
+    }
     return Material(
       color: backgroundColor,
       child: ScaffoldLayout(

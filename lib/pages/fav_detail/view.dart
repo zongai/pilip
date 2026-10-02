@@ -64,6 +64,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
             }
           },
           child: SimpleScaffold(
+      primaryScrollController: _favDetailController.scrollController,
             fab: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,

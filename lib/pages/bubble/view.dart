@@ -131,6 +131,7 @@ class _BubblePageState extends State<BubblePage>
       );
     }
     return SimpleScaffold(
+      primaryScrollController: _controller.scrollController,
       fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'bubble_view_top'),
       appBar: AppBar(
         title: Obx(() {

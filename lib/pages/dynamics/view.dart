@@ -205,7 +205,18 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
       ),
       drawer: drawer,
       endDrawer: endDrawer,
-      body: onBuild(child),
+      body: ListenableBuilder(
+        listenable: _dynamicsController.tabController,
+        builder: (context, _) {
+          final tabCtr = _dynamicsController.controller;
+          final sc = tabCtr?.scrollController ??
+              _dynamicsController.scrollController;
+          return PrimaryScrollController(
+            controller: sc,
+            child: onBuild(child),
+          );
+        },
+      ),
       floatingActionButton: ListenableBuilder(
         listenable: _dynamicsController.tabController,
         builder: (context, _) {

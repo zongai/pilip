@@ -71,7 +71,9 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return PrimaryScrollController(
+      controller: _scrollController,
+      child: Scaffold(
       floatingActionButton: Builder(
         builder: (context) => ScrollToTopButton(
               controller: _scrollController,
@@ -168,6 +170,7 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
                 );
               },
             ),
+    ),
     );
   }
 }

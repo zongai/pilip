@@ -2,14 +2,37 @@ import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:material_ui/material_ui.dart';
 
 const double _kBtnSize = 44;
 
+/// 将 [controller] 注册为当前子树的 PrimaryScrollController。
+///
+/// 在 iOS 上点击状态栏时，系统会滚动 PrimaryScrollController 对应的列表到顶部
+/// （与原生 App 行为一致）。桌面端同样可用于键盘快捷键等。
+class PrimaryScrollScope extends StatelessWidget {
+  const PrimaryScrollScope({
+    super.key,
+    required this.controller,
+    required this.child,
+  });
+
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PrimaryScrollController(
+      controller: controller,
+      child: child,
+    );
+  }
+}
+
 /// 列表下滑后显示的「快速返回顶部」按钮（桌面 / 移动端通用）。
 ///
-/// 注意：在 Stack/Positioned 中必须限制自身尺寸，否则 Material 会被撑满全屏，
-/// 形成半透明遮罩挡住底层手势（iOS 上尤为明显）。
+/// 注意：在 Stack/Positioned 中必须限制自身尺寸，否则 Material 会被撑满全屏。
 class ScrollToTopButton extends StatefulWidget {
   const ScrollToTopButton({
     super.key,
@@ -91,14 +114,12 @@ class _ScrollToTopButtonState extends State<ScrollToTopButton> {
     final rightPad = 12.0 + padding.right + widget.extraRight;
     final scheme = Theme.of(context).colorScheme;
 
-    // 未显示时完全不参与布局与点击，避免遮挡
     if (!_visible) {
       return const SizedBox.shrink();
     }
 
     return Padding(
       padding: EdgeInsets.only(right: rightPad, bottom: bottomPad),
-      // 关键尺寸，防止在 Stack 松约束下被撑满全屏
       child: SizedBox(
         width: _kBtnSize,
         height: _kBtnSize,
@@ -122,7 +143,8 @@ class _ScrollToTopButtonState extends State<ScrollToTopButton> {
   }
 }
 
-/// 在 [child] 右下角叠放返回顶部按钮。
+/// 在 [child] 右下角叠放返回顶部按钮，并把 [controller] 设为 PrimaryScrollController
+/// （支持 iOS 点状态栏回到顶部）。
 class ScrollToTopOverlay extends StatelessWidget {
   const ScrollToTopOverlay({
     super.key,
@@ -147,24 +169,27 @@ class ScrollToTopOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.passthrough,
-      clipBehavior: Clip.none,
-      children: [
-        child,
-        Positioned(
-          right: right,
-          bottom: bottom,
-          child: ScrollToTopButton(
-            controller: controller,
-            threshold: threshold,
-            onPressed: onPressed,
-            heroTag: heroTag,
-            extraBottom: extraBottom,
-            extraRight: right,
+    return PrimaryScrollController(
+      controller: controller,
+      child: Stack(
+        fit: StackFit.passthrough,
+        clipBehavior: Clip.none,
+        children: [
+          child,
+          Positioned(
+            right: right,
+            bottom: bottom,
+            child: ScrollToTopButton(
+              controller: controller,
+              threshold: threshold,
+              onPressed: onPressed,
+              heroTag: heroTag,
+              extraBottom: extraBottom,
+              extraRight: right,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -178,3 +203,8 @@ double mainNavExtraBottom(BuildContext context) {
   }
   return 0;
 }
+
+/// 是否为 iOS / iPadOS 平台（状态栏点按回顶为系统行为）。
+bool get isApplePlatform =>
+    defaultTargetPlatform == TargetPlatform.iOS ||
+    defaultTargetPlatform == TargetPlatform.macOS;

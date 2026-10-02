@@ -61,6 +61,7 @@ class _MainReplyPageState extends State<MainReplyPage>
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
     return SimpleScaffold(
+      primaryScrollController: _controller.scrollController,
       appBar: AppBar(title: const Text('查看评论')),
       body: fabAnimWrapper(
         child: refreshIndicator(

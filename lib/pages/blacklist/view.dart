@@ -38,6 +38,7 @@ class _BlackListPageState extends State<BlackListPage> {
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
+      primaryScrollController: _blackListController.scrollController,
       fab: ScrollToTopButton(controller: _blackListController.scrollController, heroTag: 'blacklist_view_top'),
       appBar: AppBar(
         title: Obx(

@@ -72,7 +72,9 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
+    return PrimaryScrollController(
+      controller: _scrollController,
+      child: Scaffold(
       floatingActionButton: ScrollToTopButton(
               controller: _scrollController,
               onPressed: _scrollController.animToTop,
@@ -134,6 +136,7 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
                 );
               },
             ),
+    ),
     );
   }
 }

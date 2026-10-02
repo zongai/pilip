@@ -23,6 +23,7 @@ abstract class FollowTypePageState<T extends StatefulWidget> extends State<T> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).colorScheme;
     return SimpleScaffold(
+      primaryScrollController: controller.scrollController,
       fab: ScrollToTopButton(controller: controller.scrollController, heroTag: 'follow_type_view_top'),
       appBar: appBar,
       body: refreshIndicator(
