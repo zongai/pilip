@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/search/search_type.dart';
 import 'package:PiliPlus/models/search/result.dart';
@@ -49,20 +50,24 @@ abstract class CommonSearchPanelState<
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
-      onRefresh: controller.onRefresh,
-      child: CustomScrollView(
-        controller: controller.scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          ?buildHeader(),
-          SliverPadding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      heroTag: 'search_${widget.searchType.name}_${widget.tag}',
+      child: refreshIndicator(
+        onRefresh: controller.onRefresh,
+        child: CustomScrollView(
+          controller: controller.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            ?buildHeader(),
+            SliverPadding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+              ),
+              sliver: Obx(() => _buildBody(controller.loadingState.value)),
             ),
-            sliver: Obx(() => _buildBody(controller.loadingState.value)),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

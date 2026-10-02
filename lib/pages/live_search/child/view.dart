@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
@@ -36,9 +37,12 @@ class _LiveSearchChildPageState extends State<LiveSearchChildPage>
   Widget build(BuildContext context) {
     super.build(context);
     double padding = widget.searchType == LiveSearchType.room ? 12 : 0;
-    return refreshIndicator(
-      onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
+        return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'live_search_scroll_to_top',
+      child: refreshIndicator(
+        onRefresh: _controller.onRefresh,
+        child: CustomScrollView(
         controller: _controller.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -53,8 +57,9 @@ class _LiveSearchChildPageState extends State<LiveSearchChildPage>
           ),
         ],
       ),
+      ),
     );
-  }
+}
 
   Widget get _buildLoading {
     return switch (widget.searchType) {

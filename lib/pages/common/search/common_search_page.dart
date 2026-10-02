@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/widgets/appbar/appbar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
 import 'package:PiliPlus/common/widgets/view_sliver_safe_area.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -40,6 +41,10 @@ abstract class CommonSearchPageState<S extends StatefulWidget, R, T>
   Widget _build(bool multiSelect) {
     return SimpleScaffold(
       appBar: _buildBar(multiSelect),
+      fab: ScrollToTopButton(
+        controller: controller.scrollController,
+        heroTag: 'common_search_scroll_to_top',
+      ),
       body: ViewInsetsSafeArea(
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),

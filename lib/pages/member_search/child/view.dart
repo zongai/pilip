@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -34,9 +35,12 @@ class _MemberSearchChildPageState extends State<MemberSearchChildPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
-      onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
+        return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'member_search_scroll_to_top',
+      child: refreshIndicator(
+        onRefresh: _controller.onRefresh,
+        child: CustomScrollView(
         controller: _controller.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -56,8 +60,9 @@ class _MemberSearchChildPageState extends State<MemberSearchChildPage>
           ),
         ],
       ),
+      ),
     );
-  }
+}
 
   Widget get _buildLoading {
     return switch (widget.searchType) {
