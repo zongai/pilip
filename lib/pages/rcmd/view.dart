@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -29,7 +30,11 @@ class _RcmdPageState extends State<RcmdPage>
   Widget build(BuildContext context) {
     super.build(context);
     final colorScheme = ColorScheme.of(context);
-    return Container(
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      extraBottom: mainNavExtraBottom(context),
+      heroTag: 'rcmd_top',
+      child: Container(
       clipBehavior: .hardEdge,
       margin: const .symmetric(horizontal: Style.safeSpace),
       decoration: const BoxDecoration(borderRadius: Style.mdRadius),
@@ -48,7 +53,7 @@ class _RcmdPageState extends State<RcmdPage>
           ],
         ),
       ),
-    );
+    ));
   }
 
   late final gridDelegate = SliverGridDelegateWithExtentAndRatio(

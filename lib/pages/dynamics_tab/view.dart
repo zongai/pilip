@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'dart:async';
 
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -50,7 +51,11 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      extraBottom: mainNavExtraBottom(context),
+      heroTag: 'dyn_tab_top',
+      child: refreshIndicator(
       onRefresh: onRefresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -64,7 +69,7 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<DynamicItemModel>?> loadingState) {

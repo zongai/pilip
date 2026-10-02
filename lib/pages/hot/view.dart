@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -59,7 +60,11 @@ class _HotPageState extends State<HotPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      extraBottom: mainNavExtraBottom(context),
+      heroTag: 'hot_top',
+      child: refreshIndicator(
       onRefresh: controller.onRefresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -116,7 +121,7 @@ class _HotPageState extends State<HotPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<HotVideoItemModel>?> loadingState) {

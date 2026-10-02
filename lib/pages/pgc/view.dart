@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'dart:math';
 
 import 'package:PiliPlus/common/style.dart';
@@ -55,7 +56,11 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
   Widget build(BuildContext context) {
     super.build(context);
     final ThemeData theme = Theme.of(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      extraBottom: mainNavExtraBottom(context),
+      heroTag: 'pgc_top',
+      child: refreshIndicator(
       onRefresh: controller.onRefresh,
       child: CustomScrollView(
         controller: controller.scrollController,
@@ -76,7 +81,7 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
           ..._buildRcmd(theme),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildTimeline(

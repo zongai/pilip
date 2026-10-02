@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -50,7 +51,11 @@ class _LivePageState extends State<LivePage>
   Widget build(BuildContext context) {
     super.build(context);
     final ThemeData theme = Theme.of(context);
-    return Container(
+    return ScrollToTopOverlay(
+      controller: controller.scrollController,
+      extraBottom: mainNavExtraBottom(context),
+      heroTag: 'live_top',
+      child: Container(
       clipBehavior: Clip.hardEdge,
       margin: const EdgeInsets.symmetric(horizontal: Style.safeSpace),
       decoration: const BoxDecoration(borderRadius: Style.mdRadius),
@@ -75,7 +80,7 @@ class _LivePageState extends State<LivePage>
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildTop(ThemeData theme, Pair<LiveCardList?, LiveCardList?> data) {

@@ -205,24 +205,13 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
       ),
       drawer: drawer,
       endDrawer: endDrawer,
-      body: ListenableBuilder(
-        listenable: _dynamicsController.tabController,
-        builder: (context, _) {
-          final tabCtr = _dynamicsController.controller;
-          final sc = tabCtr?.scrollController ??
-              _dynamicsController.scrollController;
-          return PrimaryScrollController(
-            controller: sc,
-            child: onBuild(child),
-          );
-        },
-      ),
+      body: onBuild(child),
       floatingActionButton: ListenableBuilder(
         listenable: _dynamicsController.tabController,
         builder: (context, _) {
           final tabCtr = _dynamicsController.controller;
-          final sc = tabCtr?.scrollController ??
-              _dynamicsController.scrollController;
+          final sc = tabCtr?.scrollController;
+          if (sc == null) return const SizedBox.shrink();
           return ScrollToTopButton(
             key: ValueKey(_dynamicsController.tabController.index),
             controller: sc,
