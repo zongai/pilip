@@ -62,7 +62,6 @@ class _DynTopicPageState extends State<DynTopicPage>
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'dynamics_topic_view_top'),
       body: refreshIndicator(
         onRefresh: _controller.onRefresh,
         child: fabAnimWrapper(

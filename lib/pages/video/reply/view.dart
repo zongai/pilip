@@ -77,7 +77,6 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
           body: CustomScrollView(
-              controller: _videoReplyController.scrollController,
             controller: widget.isNested
                 ? null
                 : _videoReplyController.scrollController,

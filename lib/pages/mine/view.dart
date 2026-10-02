@@ -80,31 +80,32 @@ class _MediaPageState extends CommonPageState<MinePage>
           child: Material(
             type: .transparency,
             child: ScrollToTopOverlay(
-      controller: controller.scrollController,
-      heroTag: 'mine_view_top',
-      extraBottom: mainNavExtraBottom(context),
-      child: refreshIndicator(
-              onRefresh: controller.onRefresh,
-              child: onBuild(
-                ListView(
-                  padding: const .only(bottom: 100),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
-                    Obx(
-                      () => controller.loadingState.value is Loading
-                          ? const SizedBox.shrink()
-                          : _buildFav(theme, secondary),
-                    ),
-                  ],
+              controller: controller.scrollController,
+              heroTag: 'mine_view_top',
+              extraBottom: mainNavExtraBottom(context),
+              child: refreshIndicator(
+                onRefresh: controller.onRefresh,
+                child: onBuild(
+                  ListView(
+                    padding: const .only(bottom: 100),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      _buildUserInfo(theme, secondary),
+                      _buildActions(secondary),
+                      Obx(
+                        () => controller.loadingState.value is Loading
+                            ? const SizedBox.shrink()
+                            : _buildFav(theme, secondary),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ],
-    ));
+    );
   }
 
   Widget _buildActions(Color primary) {
