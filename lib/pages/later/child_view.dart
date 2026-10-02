@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/later_view_type.dart';
@@ -42,7 +43,10 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _laterController.scrollController,
+      heroTag: 'later_child_view_top',
+      child: refreshIndicator(
       onRefresh: _laterController.onRefresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -59,7 +63,7 @@ class _LaterViewChildPageState extends State<LaterViewChildPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<LaterItemModel>?> loadingState) {

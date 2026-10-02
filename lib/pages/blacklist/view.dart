@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -37,6 +38,7 @@ class _BlackListPageState extends State<BlackListPage> {
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
+      fab: ScrollToTopButton(controller: _blackListController.scrollController, heroTag: 'blacklist_view_top'),
       appBar: AppBar(
         title: Obx(
           () => Text(

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/appbar/appbar.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
@@ -94,7 +95,8 @@ class _HistoryPageState extends State<HistoryPage>
             }
           },
           child: SimpleScaffold(
-            appBar: MultiSelectAppBarWidget(
+            fab: ScrollToTopButton(controller: _historyController.scrollController, heroTag: 'history_view_top'),
+      appBar: MultiSelectAppBarWidget(
               visible: enableMultiSelect,
               ctr: currCtr(),
               child: _buildAppBar,

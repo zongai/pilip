@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
@@ -88,7 +89,8 @@ class _UpowerRankPageState extends State<UpowerRankPage>
     );
     if (widget.privilegeType == null) {
       return SimpleScaffold(
-        appBar: AppBar(
+        fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'member_upower_rank_view_top'),
+      appBar: AppBar(
           title: Text('$_name的充电排行榜${_count == null ? '' : '($_count)'}'),
           actions: [
             TextButton(

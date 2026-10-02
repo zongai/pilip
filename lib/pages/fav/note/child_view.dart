@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -39,7 +40,10 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
     final theme = Theme.of(context);
     final padding = MediaQuery.viewPaddingOf(context);
     return PgcLayout(
-      body: refreshIndicator(
+      body: ScrollToTopOverlay(
+        controller: _favNoteController.scrollController,
+        heroTag: 'fav_note_child_view_top',
+        child: refreshIndicator(
         onRefresh: _favNoteController.onRefresh,
         child: CustomScrollView(
           controller: _favNoteController.scrollController,
@@ -53,7 +57,7 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
             ),
           ],
         ),
-      ),
+      )),
       toolbar: Obx(
         () => AnimatedSlide(
           offset: _favNoteController.enableMultiSelect.value

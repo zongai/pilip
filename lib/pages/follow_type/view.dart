@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -22,6 +23,7 @@ abstract class FollowTypePageState<T extends StatefulWidget> extends State<T> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).colorScheme;
     return SimpleScaffold(
+      fab: ScrollToTopButton(controller: controller.scrollController, heroTag: 'follow_type_view_top'),
       appBar: appBar,
       body: refreshIndicator(
         onRefresh: controller.onRefresh,

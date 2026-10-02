@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show SearchItem;
@@ -31,7 +32,10 @@ class _ReplySearchChildPageState extends State<ReplySearchChildPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'video_reply_search_item_child_view_top',
+      child: refreshIndicator(
       onRefresh: _controller.onRefresh,
       child: CustomScrollView(
         controller: _controller.scrollController,
@@ -46,7 +50,7 @@ class _ReplySearchChildPageState extends State<ReplySearchChildPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<SearchItem>?> loadingState) {

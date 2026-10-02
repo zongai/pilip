@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
@@ -79,6 +80,9 @@ class _FollowChildPageState extends State<FollowChildPage>
     final padding = MediaQuery.viewPaddingOf(context);
     return Padding(
       padding: EdgeInsets.only(left: padding.left, right: padding.right),
+      child: ScrollToTopOverlay(
+      controller: _followController.scrollController,
+      heroTag: 'follow_child_child_view_top',
       child: refreshIndicator(
         onRefresh: _followController.onRefresh,
         child: CustomScrollView(
@@ -101,7 +105,7 @@ class _FollowChildPageState extends State<FollowChildPage>
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<FollowItemModel>?> loadingState) {

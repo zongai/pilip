@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -63,7 +64,16 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
             }
           },
           child: SimpleScaffold(
-            fab: Padding(
+            fab: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                ScrollToTopButton(
+                  controller: _favDetailController.scrollController,
+                  heroTag: 'fav_detail_view_top',
+                ),
+                const SizedBox(height: 12),
+                Padding(
               padding: .only(
                 right: kFloatingActionButtonMargin + padding.right,
                 bottom: kFloatingActionButtonMargin + padding.bottom,
@@ -99,6 +109,8 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                       )
                     : const SizedBox.shrink(),
               ),
+            ),
+              ],
             ),
             body: refreshIndicator(
               onRefresh: _favDetailController.onRefresh,

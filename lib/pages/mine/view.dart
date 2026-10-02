@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -78,7 +79,10 @@ class _MediaPageState extends CommonPageState<MinePage>
         Expanded(
           child: Material(
             type: .transparency,
-            child: refreshIndicator(
+            child: ScrollToTopOverlay(
+      controller: controller.scrollController,
+      heroTag: 'mine_view_top',
+      child: refreshIndicator(
               onRefresh: controller.onRefresh,
               child: onBuild(
                 ListView(
@@ -99,7 +103,7 @@ class _MediaPageState extends CommonPageState<MinePage>
           ),
         ),
       ],
-    );
+    ));
   }
 
   Widget _buildActions(Color primary) {

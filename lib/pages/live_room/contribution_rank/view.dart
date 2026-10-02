@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -130,7 +131,10 @@ class _ContributionRankTypeState extends State<_ContributionRankType>
     final showScore = widget.type == .online_rank;
     return Material(
       type: .transparency,
-      child: refreshIndicator(
+      child: ScrollToTopOverlay(
+        controller: _controller.scrollController,
+        heroTag: 'live_room_contribution_rank_view_top',
+        child: refreshIndicator(
         onRefresh: _controller.onRefresh,
         child: CustomScrollView(
           controller: _controller.scrollController,
@@ -143,7 +147,7 @@ class _ContributionRankTypeState extends State<_ContributionRankType>
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 

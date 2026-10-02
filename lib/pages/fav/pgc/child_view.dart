@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/fav_pgc_item.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
@@ -46,7 +47,10 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
     final theme = Theme.of(context);
     final padding = MediaQuery.viewPaddingOf(context);
     return PgcLayout(
-      body: refreshIndicator(
+      body: ScrollToTopOverlay(
+        controller: _favPgcController.scrollController,
+        heroTag: 'fav_pgc_child_view_top',
+        child: refreshIndicator(
         onRefresh: _favPgcController.onRefresh,
         child: CustomScrollView(
           controller: _favPgcController.scrollController,
@@ -60,7 +64,7 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
             ),
           ],
         ),
-      ),
+      )),
       toolbar: Obx(
         () => AnimatedSlide(
           offset: _favPgcController.enableMultiSelect.value

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -52,7 +53,10 @@ class _SubDetailPageState extends State<SubDetailPage> with GridMixin {
     final padding = MediaQuery.viewPaddingOf(context);
     return Material(
       color: theme.colorScheme.surface,
-      child: refreshIndicator(
+      child: ScrollToTopOverlay(
+        controller: _subDetailController.scrollController,
+        heroTag: 'subscription_detail_view_top',
+        child: refreshIndicator(
         onRefresh: _subDetailController.onRefresh,
         child: CustomScrollView(
           controller: _subDetailController.scrollController,
@@ -72,7 +76,7 @@ class _SubDetailPageState extends State<SubDetailPage> with GridMixin {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 

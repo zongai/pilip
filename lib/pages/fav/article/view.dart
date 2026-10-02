@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -28,7 +29,10 @@ class _FavArticlePageState extends State<FavArticlePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _favArticleController.scrollController,
+      heroTag: 'fav_article_view_top',
+      child: refreshIndicator(
       onRefresh: _favArticleController.onRefresh,
       child: CustomScrollView(
         controller: _favArticleController.scrollController,
@@ -45,7 +49,7 @@ class _FavArticlePageState extends State<FavArticlePage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<FavArticleItemModel>?> loadingState) {

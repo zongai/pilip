@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -139,6 +140,7 @@ class _MemberVideoState extends State<MemberVideo>
     final theme = Theme.of(context);
     final padding = MediaQuery.viewPaddingOf(context);
     Widget child = CustomScrollView(
+      controller: _controller.scrollController,
       physics: ReloadScrollPhysics(controller: _controller),
       slivers: [
         SliverPadding(
@@ -152,7 +154,16 @@ class _MemberVideoState extends State<MemberVideo>
     if (_controller.isVideo && _controller.fromViewAid?.isNotEmpty == true) {
       child = ScaffoldLayout(
         body: fabAnimWrapper(child: child),
-        fab: Obx(
+        fab: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            ScrollToTopButton(
+              controller: _controller.scrollController,
+              heroTag: 'member_video_view_top',
+            ),
+            const SizedBox(height: 12),
+            Obx(
           () => !_controller.isLocating
               ? SlideTransition(
                   position: fabAnimation,
@@ -191,6 +202,8 @@ class _MemberVideoState extends State<MemberVideo>
                   ),
                 )
               : const SizedBox.shrink(),
+            ),
+          ],
         ),
       );
     }

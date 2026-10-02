@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -46,7 +47,10 @@ class _LiveAreaChildPageState extends State<LiveAreaChildPage>
   Widget build(BuildContext context) {
     super.build(context);
     final ThemeData theme = Theme.of(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'live_area_detail_child_view_top',
+      child: refreshIndicator(
       onRefresh: _controller.onRefresh,
       child: CustomScrollView(
         controller: _controller.scrollController,
@@ -65,7 +69,7 @@ class _LiveAreaChildPageState extends State<LiveAreaChildPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   late final gridDelegate = SliverGridDelegateWithExtentAndRatio(

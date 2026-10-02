@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -70,6 +71,7 @@ class _MainReplyPageState extends State<MainReplyPage>
               right: padding.right,
             ),
             child: CustomScrollView(
+              controller: _controller.scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 buildReplyHeader(colorScheme),
@@ -81,7 +83,16 @@ class _MainReplyPageState extends State<MainReplyPage>
           ),
         ).constraintWidth(),
       ),
-      fab: SlideTransition(
+      fab: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ScrollToTopButton(
+            controller: _controller.scrollController,
+            heroTag: 'main_reply_view_top',
+          ),
+          const SizedBox(height: 12),
+          SlideTransition(
         position: fabAnimation,
         child: Padding(
           padding: .only(
@@ -104,6 +115,8 @@ class _MainReplyPageState extends State<MainReplyPage>
             child: const Icon(Icons.reply),
           ),
         ),
+      ),
+        ],
       ),
     );
   }

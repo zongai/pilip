@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -66,7 +67,10 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
   Widget build(BuildContext context) {
     super.build(context);
     final theme = Theme.of(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'pgc_review_child_view_top',
+      child: refreshIndicator(
       onRefresh: _controller.onRefresh,
       child: CustomScrollView(
         controller: _controller.scrollController,
@@ -83,7 +87,7 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(

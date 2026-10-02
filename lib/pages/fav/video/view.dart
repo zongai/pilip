@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
@@ -26,7 +27,10 @@ class _FavVideoPageState extends State<FavVideoPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _favController.scrollController,
+      heroTag: 'fav_video_view_top',
+      child: refreshIndicator(
       onRefresh: _favController.onRefresh,
       child: CustomScrollView(
         controller: _favController.scrollController,
@@ -43,7 +47,7 @@ class _FavVideoPageState extends State<FavVideoPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildBody(LoadingState<List<FavFolderInfo>?> loadingState) {

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/assets.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/dynamic_sliver_app_bar/dynamic_sliver_app_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -61,6 +62,7 @@ class _DynTopicPageState extends State<DynTopicPage>
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
+      fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'dynamics_topic_view_top'),
       body: refreshIndicator(
         onRefresh: _controller.onRefresh,
         child: fabAnimWrapper(
@@ -141,7 +143,16 @@ class _DynTopicPageState extends State<DynTopicPage>
           ),
         ),
       ),
-      fab: SlideTransition(
+      fab: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ScrollToTopButton(
+            controller: _controller.scrollController,
+            heroTag: 'dynamics_topic_view_top',
+          ),
+          const SizedBox(height: 12),
+          SlideTransition(
         position: fabAnimation,
         child: Padding(
           padding: .only(
@@ -166,6 +177,8 @@ class _DynTopicPageState extends State<DynTopicPage>
             label: const Text('参与话题'),
           ),
         ),
+      ),
+        ],
       ),
     );
   }

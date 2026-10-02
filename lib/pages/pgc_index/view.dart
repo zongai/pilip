@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/animated_height.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -47,7 +48,8 @@ class _PgcIndexPageState extends State<PgcIndexPage>
     final theme = Theme.of(context);
     return widget.indexType == null
         ? SimpleScaffold(
-            appBar: AppBar(title: const Text('索引')),
+            fab: ScrollToTopButton(controller: _ctr.scrollController, heroTag: 'pgc_index_view_top'),
+      appBar: AppBar(title: const Text('索引')),
             body: Obx(() => _buildBody(theme, _ctr.conditionState.value)),
           )
         : Obx(() => _buildBody(theme, _ctr.conditionState.value));

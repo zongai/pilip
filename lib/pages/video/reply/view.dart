@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -76,6 +77,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
           body: CustomScrollView(
+              controller: _videoReplyController.scrollController,
             controller: widget.isNested
                 ? null
                 : _videoReplyController.scrollController,
@@ -119,7 +121,25 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               Obx(() => _buildBody(_videoReplyController.loadingState.value)),
             ],
           ),
-          fab: SlideTransition(
+          fab: Column(
+
+            mainAxisSize: MainAxisSize.min,
+
+            crossAxisAlignment: CrossAxisAlignment.end,
+
+            children: [
+
+              ScrollToTopButton(
+
+                controller: _videoReplyController.scrollController,
+
+                heroTag: 'video_reply_view_top',
+
+              ),
+
+              const SizedBox(height: 12),
+
+              SlideTransition(
             position: fabAnimation,
             child: Padding(
               padding: .only(
@@ -141,6 +161,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               ),
             ),
           ),
+              ],
+            ),
         ),
       ),
     );

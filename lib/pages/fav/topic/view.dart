@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -31,7 +32,10 @@ class _FavTopicPageState extends State<FavTopicPage>
   Widget build(BuildContext context) {
     super.build(context);
     final ThemeData theme = Theme.of(context);
-    return refreshIndicator(
+    return ScrollToTopOverlay(
+      controller: _controller.scrollController,
+      heroTag: 'fav_topic_view_top',
+      child: refreshIndicator(
       onRefresh: _controller.onRefresh,
       child: CustomScrollView(
         controller: _controller.scrollController,
@@ -50,7 +54,7 @@ class _FavTopicPageState extends State<FavTopicPage>
           ),
         ],
       ),
-    );
+    ));
   }
 
   late final gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(

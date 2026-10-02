@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
+import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -130,6 +131,7 @@ class _BubblePageState extends State<BubblePage>
       );
     }
     return SimpleScaffold(
+      fab: ScrollToTopButton(controller: _controller.scrollController, heroTag: 'bubble_view_top'),
       appBar: AppBar(
         title: Obx(() {
           final tribeName = _controller.tribeName.value;
