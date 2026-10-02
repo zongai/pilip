@@ -72,7 +72,7 @@ abstract final class VideoHttp {
         //过滤掉live与ad，以及拉黑用户
         if (i['goto'] == 'av' &&
             (i['owner'] != null &&
-                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid']))) {
+                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['owner']['mid'])))) {
           RcmdVideoItemModel videoItem = RcmdVideoItemModel.fromJson(i);
           if (!RecommendFilter.filter(videoItem)) {
             list.add(videoItem);
@@ -146,7 +146,7 @@ abstract final class VideoHttp {
             i['ad_info'] == null &&
             i['can_play'] == 1 &&
             (i['args'] != null &&
-                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['args']['up_id']))) {
+                !(Pref.enableLocalFeatures && GlobalData().blackMids.contains(i['args']['up_id'])))) {
           if (enableFilter &&
               i['args']?['tname'] != null &&
               zoneRegExp.hasMatch(i['args']['tname'])) {

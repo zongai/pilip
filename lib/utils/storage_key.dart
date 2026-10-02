@@ -240,12 +240,12 @@ abstract final class SettingBoxKey {
       reduceLuxColor = 'reduceLuxColor',
       liveCdnUrl = 'liveCdnUrl',
       saveReply = 'saveReply',
-      appFont = 'appFont';
+      appFont = 'appFont',
+      enableLocalFeatures = 'enableLocalFeatures';
 }
 
 abstract final class LocalCacheKey {
   static const String historyPause = 'historyPause',
-      enableLocalFeatures = 'enableLocalFeatures',
       blackMids = 'blackMids',
       localFollows = 'localFollows',
       localSeasons = 'localSeasons',
