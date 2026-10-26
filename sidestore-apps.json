@@ -12,8 +12,7 @@
       "version": "2.1.4+39",
       "versionDate": "2026-10-02",
       "versionDescription": "修复 iOS 首页灰屏无法操作；列表铺满与返回顶部按钮布局调整。",
-      "minOSVersion": "14.0",
-      "downloadURL": "https://github.com/zongai/pilip/releases/download/v2.1.4%2B39/PiliPlus_ios_2.1.4%2B39.ipa"
+      "minOSVersion": "14.0"
     }
   ]
 }
