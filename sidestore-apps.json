@@ -11,6 +11,7 @@
       "tintColor": "FB7299",
       "version": "2.1.4+39",
       "versionDate": "2026-10-02",
+      "category": "media",
       "versionDescription": "修复 iOS 首页灰屏无法操作；列表铺满与返回顶部按钮布局调整。",
       "minOSVersion": "14.0",
       "banner": "https://raw.githubusercontent.com/zongai/zoo/refs/heads/main/banner.png"
