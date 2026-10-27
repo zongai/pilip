@@ -20,6 +20,10 @@ class GlobalData {
   List<Map> localVideoPlaylists = Pref.localVideoPlaylists;
   List<Map> localHistoryList = Pref.localHistory;
   List<Map> localLaterList = Pref.localLater;
+
+  /// 连续播放本地列表时的临时备份，避免路由参数丢失导致播放侧栏空白
+  List? pendingLocalMediaList;
+  String? pendingLocalMediaTitle;
   Set<int> localFollowMids = {
     for (final e in Pref.localFollows)
       if (e['mid'] is int) e['mid'] as int
