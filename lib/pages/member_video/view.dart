@@ -290,10 +290,11 @@ class _MemberVideoState extends State<MemberVideo>
 
 
   String _itemKey(SpaceArchiveItem item) =>
-      item.bvid ?? (item.aid != null ? 'av${item.aid}' : item.param ?? '');
+      item.bvid ?? item.param ?? '';
 
   List<SpaceArchiveItem> get _currentItems {
     if (_controller.loadingState.value case Success(:final response)) {
+      if (response == null) return const [];
       return List<SpaceArchiveItem>.from(response);
     }
     return const [];
@@ -361,8 +362,8 @@ class _MemberVideoState extends State<MemberVideo>
     Pref.addLocalVideoPlaylistItems(
       items
           .map((e) => {
-                'aid': e.aid,
-                'bvid': e.bvid,
+                'aid': null,
+                'bvid': e.bvid ?? e.param,
                 'cid': e.cid,
                 'title': e.title,
                 'cover': e.cover,

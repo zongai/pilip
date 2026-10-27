@@ -227,20 +227,17 @@ class MainController extends GetxController
   void setNavBarConfig() {
     List<int>? navBarSort =
         (GStorage.setting.get(SettingBoxKey.navBarSort) as List?)?.fromCast();
-    late final List<NavigationBarType> navigationBars;
+    List<NavigationBarType> bars;
     if (navBarSort == null || navBarSort.isEmpty) {
-      navigationBars = NavigationBarType.values;
+      bars = List<NavigationBarType>.from(NavigationBarType.values);
     } else {
-      navigationBars = navBarSort
-          .map(NavigationBarType.values.elementAt)
-          .toList();
+      bars = navBarSort.map(NavigationBarType.values.elementAt).toList();
     }
     // 启用本地功能时隐藏「动态」入口
     if (Pref.enableLocalFeatures) {
-      navigationBars =
-          navigationBars.where((e) => e != NavigationBarType.dynamics).toList();
+      bars = bars.where((e) => e != NavigationBarType.dynamics).toList();
     }
-    this.navigationBars = navigationBars;
+    this.navigationBars = bars;
     final defPage = Pref.defaultHomePage;
     selectedIndex.value = math.max(0, navigationBars.indexOf(defPage));
   }
