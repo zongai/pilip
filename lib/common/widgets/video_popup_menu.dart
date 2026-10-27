@@ -65,57 +65,85 @@ class VideoPopupMenu extends StatelessWidget {
                     '加入本地播放列表',
                     const Icon(Icons.playlist_add, size: 16),
                     () async {
-                      final int? aid = videoItem is BaseVideoItemModel
-                          ? (videoItem as BaseVideoItemModel).aid
-                          : null;
-                      final pls = Pref.localVideoPlaylists;
-                      int? targetId;
-                      if (pls.isEmpty) {
-                        targetId = Pref.createLocalVideoPlaylist('默认列表');
-                      } else if (pls.length == 1) {
-                        targetId = pls.first['id'] as int?;
-                      } else {
-                        targetId = await showDialog<int>(
-                          context: context,
-                          builder: (ctx) => SimpleDialog(
-                            title: const Text('选择播放列表'),
-                            children: [
-                              for (final pl in pls)
-                                SimpleDialogOption(
-                                  onPressed: () =>
-                                      Navigator.pop(ctx, pl['id'] as int),
-                                  child: Text(
-                                    '${pl['title']} (${(pl['items'] is List) ? (pl['items'] as List).length : 0})',
-                                  ),
-                                ),
-                              SimpleDialogOption(
-                                onPressed: () {
-                                  final id = Pref.createLocalVideoPlaylist(
-                                    '列表 ${pls.length + 1}',
-                                  );
-                                  Navigator.pop(ctx, id);
-                                },
-                                child: const Text('+ 新建列表'),
-                              ),
-                            ],
-                          ),
-                        );
+                      int? asInt(dynamic v) {
+                        if (v == null) return null;
+                        if (v is int) return v;
+                        if (v is num) return v.toInt();
+                        return int.tryParse('$v');
                       }
-                      if (targetId == null) return;
-                      Pref.addLocalVideoPlaylistItem(
-                        playlistId: targetId,
-                        aid: aid,
-                        bvid: videoItem.bvid,
-                        cid: videoItem.cid,
-                        title: videoItem.title,
-                        cover: videoItem.cover,
-                        authorName: videoItem.owner.name,
-                        authorMid: videoItem.owner.mid,
-                        duration: videoItem.duration > 0
-                            ? videoItem.duration
-                            : null,
-                      );
-                      SmartDialog.showToast('已加入本地播放列表');
+                      try {
+                        final int? aid = videoItem is BaseVideoItemModel
+                            ? (videoItem as BaseVideoItemModel).aid
+                            : asInt((videoItem as dynamic).aid);
+                        final bvid = videoItem.bvid;
+                        if ((bvid == null || bvid.isEmpty) && aid == null) {
+                          SmartDialog.showToast('无法获取视频信息');
+                          return;
+                        }
+                        // PopupMenu 关闭后 context 可能失效
+                        await Future<void>.delayed(Duration.zero);
+                        final rootCtx = Get.context ?? context;
+                        final pls = Pref.localVideoPlaylists
+                            .map((e) => Map<String, dynamic>.from(e))
+                            .toList();
+                        int? targetId;
+                        if (pls.isEmpty) {
+                          targetId = Pref.createLocalVideoPlaylist('默认列表');
+                        } else if (pls.length == 1) {
+                          targetId = asInt(pls.first['id']);
+                        } else {
+                          if (!rootCtx.mounted) {
+                            SmartDialog.showToast('界面已关闭，请重试');
+                            return;
+                          }
+                          targetId = await showDialog<int>(
+                            context: rootCtx,
+                            builder: (ctx) => SimpleDialog(
+                              title: const Text('选择播放列表'),
+                              children: [
+                                for (final pl in pls)
+                                  SimpleDialogOption(
+                                    onPressed: () => Navigator.pop(
+                                      ctx,
+                                      asInt(pl['id']),
+                                    ),
+                                    child: Text(
+                                      '${pl['title']} (${(pl['items'] is List) ? (pl['items'] as List).length : 0})',
+                                    ),
+                                  ),
+                                SimpleDialogOption(
+                                  onPressed: () {
+                                    final id = Pref.createLocalVideoPlaylist(
+                                      '列表 ${pls.length + 1}',
+                                    );
+                                    Navigator.pop(ctx, id);
+                                  },
+                                  child: const Text('+ 新建列表'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        if (targetId == null) return;
+                        Pref.addLocalVideoPlaylistItem(
+                          playlistId: targetId,
+                          aid: aid,
+                          bvid: bvid,
+                          cid: videoItem.cid,
+                          title: videoItem.title,
+                          cover: videoItem.cover,
+                          authorName: videoItem.owner.name,
+                          authorMid: videoItem.owner.mid,
+                          duration: videoItem.duration > 0
+                              ? videoItem.duration
+                              : null,
+                        );
+                        final count =
+                            Pref.getLocalVideoPlaylistItems(targetId).length;
+                        SmartDialog.showToast('已加入本地播放列表（$count）');
+                      } catch (e) {
+                        SmartDialog.showToast('加入失败: $e');
+                      }
                     },
                   ),
                   if (videoItem.cid != null && Pref.enableAi)

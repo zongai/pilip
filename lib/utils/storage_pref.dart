@@ -271,8 +271,24 @@ abstract final class Pref {
   }
 
   static set localVideoPlaylists(List<Map> list) {
-    _localCache.put(LocalCacheKey.localVideoPlaylist, list);
-    GlobalData().localVideoPlaylists = list;
+    // 深拷贝为普通 Map/List，避免 Hive 嵌套类型读写异常
+    final encoded = list.map((pl) {
+      final m = Map<String, dynamic>.from(pl);
+      final items = m['items'];
+      if (items is List) {
+        m['items'] = items
+            .map((e) => e is Map ? Map<String, dynamic>.from(e) : e)
+            .toList();
+      } else {
+        m['items'] = <Map>[];
+      }
+      m['id'] = _plId(m['id']) ?? DateTime.now().millisecondsSinceEpoch;
+      m['title'] = '${m['title'] ?? ''}';
+      return m;
+    }).toList();
+    _localCache.put(LocalCacheKey.localVideoPlaylist, encoded);
+    GlobalData().localVideoPlaylists = encoded;
+    GlobalData().localVideoPlaylistList = localVideoPlaylist;
   }
 
   /// 兼容：默认列表的 items
