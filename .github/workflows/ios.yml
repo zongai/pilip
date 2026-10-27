@@ -10,6 +10,9 @@ on:
         type: string
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-macos-app:
     name: Release IOS
@@ -36,25 +39,30 @@ jobs:
 
       - name: Build iOS
         run: |
-          # 强制无签名构建（SideStore / 自签）
-          flutter build ios --release --no-codesign --dart-define-from-file=pili_release.json --no-pub             || xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner                  -configuration Release -sdk iphoneos                  -destination 'generic/platform=iOS'                  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-                  build
+          flutter build ios --release --no-codesign --dart-define-from-file=pili_release.json --no-pub \
+            || xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+                 -configuration Release -sdk iphoneos \
+                 -destination 'generic/platform=iOS' \
+                 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=- \
+                 build
           ln -sf ./build/ios/iphoneos Payload
-          # make AltSign happy...
           find Payload/Runner.app/Frameworks -type d -name "*.framework" -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
           zip -r9 PiliPlus_ios_${{env.version}}.ipa Payload/Runner.app
 
-      - name: Release
-        if: ${{ github.event.inputs.tag != '' }}
-        uses: softprops/action-gh-release@v3
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: ${{ github.event.inputs.tag }}
+          tag_name: v${{ env.version }}
+          name: PiliPlus ${{ env.version }}
           files: |
             PiliPlus_ios_*.ipa
+          generate_release_notes: false
+          fail_on_unmatched_files: false
 
       - name: Upload ios release
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
-          archive: false
           name: iOS-release
           path: PiliPlus_ios_*.ipa
+          retention-days: 3
