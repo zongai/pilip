@@ -1,11 +1,10 @@
 import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -20,7 +19,7 @@ int? _asInt(dynamic v) {
   return int.tryParse('$v');
 }
 
-/// 本地播放列表管理（支持多个列表）
+/// 本地播放列表管理（支持多个列表，随宽度自适应列数）
 class LocalVideoPlaylistPage extends StatefulWidget {
   const LocalVideoPlaylistPage({super.key});
 
@@ -63,7 +62,10 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
           decoration: const InputDecoration(hintText: '列表名称'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
             child: const Text('创建'),
@@ -85,7 +87,6 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
       return;
     }
     final title = pl['title'] as String? ?? '播放列表';
-    // 使用 Navigator 避免在底栏嵌套场景下 Get.to 灰屏
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LocalVideoPlaylistDetailPage(
@@ -95,6 +96,121 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
       ),
     );
     if (mounted) _refresh();
+  }
+
+  Future<void> _rename(Map pl) async {
+    final id = _asInt(pl['id']);
+    if (id == null) return;
+    final title = pl['title'] as String? ?? '';
+    final ctrl = TextEditingController(text: title);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名'),
+        content: TextField(controller: ctrl, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      Pref.renameLocalVideoPlaylist(id, name);
+      _refresh();
+    }
+  }
+
+  void _delete(Map pl) {
+    final id = _asInt(pl['id']);
+    if (id == null) return;
+    Pref.deleteLocalVideoPlaylist(id);
+    SmartDialog.showToast('已删除');
+    _refresh();
+  }
+
+  Widget _playlistTile(ThemeData theme, Map pl) {
+    final rawItems = pl['items'];
+    final items = rawItems is List ? rawItems : const [];
+    final title = pl['title'] as String? ?? '未命名';
+    String? cover;
+    if (items.isNotEmpty && items.first is Map) {
+      cover = (items.first as Map)['cover'] as String?;
+    }
+    final outline = theme.colorScheme.outline;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: () => _open(pl),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Style.safeSpace,
+            vertical: 5,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: Style.aspectRatio,
+                child: LayoutBuilder(
+                  builder: (context, c) => NetworkImgLayer(
+                    src: cover,
+                    width: c.maxWidth,
+                    height: c.maxHeight,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 85,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: theme.textTheme.bodyMedium!.fontSize,
+                          height: 1.42,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${items.length} 个视频 · 按标题排序',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: outline),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'rename') {
+                    _rename(pl);
+                  } else if (v == 'delete') {
+                    _delete(pl);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'rename', child: Text('重命名')),
+                  PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -116,166 +232,51 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
         ],
       ),
       body: _playlists.isEmpty
-          ? Center(
-              child: Text(
-                '暂无播放列表',
-                style: TextStyle(color: outline),
-              ),
-            )
-          : ListView.builder(
-              itemCount: _playlists.length,
-              itemBuilder: (context, index) {
-                final pl = _playlists[index];
-                final rawItems = pl['items'];
-                final items = rawItems is List ? rawItems : const [];
-                final title = pl['title'] as String? ?? '未命名';
-                String? cover;
-                if (items.isNotEmpty && items.first is Map) {
-                  cover = (items.first as Map)['cover'] as String?;
+          ? Center(child: Text('暂无播放列表', style: TextStyle(color: outline)))
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 600;
+                if (!wide) {
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 88),
+                    itemCount: _playlists.length,
+                    itemBuilder: (context, index) =>
+                        _playlistTile(theme, _playlists[index]),
+                  );
                 }
-                final id = _asInt(pl['id']);
-                return Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    onTap: () => _open(pl),
-                    onLongPress: () async {
-                      if (id == null) return;
-                      // 与收藏夹一致：长按菜单
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AspectRatio(
-                            aspectRatio: Style.aspectRatio,
-                            child: LayoutBuilder(
-                              builder: (context, boxConstraints) {
-                                return NetworkImgLayer(
-                                  src: cover,
-                                  width: boxConstraints.maxWidth,
-                                  height: boxConstraints.maxHeight,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: SizedBox(
-                              height: 85,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(letterSpacing: 0.3),
-                                  ),
-                                  const Spacer(),
-                                  Text(
-                                    '${items.length}个内容',
-                                    style: TextStyle(
-                                      fontSize:
-                                          theme.textTheme.labelMedium!.fontSize,
-                                      color: outline,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          PopupMenuButton<String>(
-                            onSelected: (v) async {
-                              if (id == null) return;
-                              if (v == 'play' && items.isNotEmpty) {
-                                await Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        LocalVideoPlaylistDetailPage(
-                                      playlistId: id,
-                                      title: title,
-                                      autoPlay: true,
-                                    ),
-                                  ),
-                                );
-                                if (mounted) _refresh();
-                              } else if (v == 'rename') {
-                                final ctrl =
-                                    TextEditingController(text: title);
-                                final name = await showDialog<String>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('重命名'),
-                                    content: TextField(
-                                      controller: ctrl,
-                                      autofocus: true,
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(ctx),
-                                        child: const Text('取消'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(
-                                            ctx, ctrl.text.trim()),
-                                        child: const Text('确定'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (name != null && name.isNotEmpty) {
-                                  Pref.renameLocalVideoPlaylist(id, name);
-                                  _refresh();
-                                }
-                              } else if (v == 'delete') {
-                                Pref.deleteLocalVideoPlaylist(id);
-                                SmartDialog.showToast('已删除');
-                                _refresh();
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              if (items.isNotEmpty)
-                                const PopupMenuItem(
-                                  value: 'play',
-                                  child: Text('连续播放'),
-                                ),
-                              const PopupMenuItem(
-                                value: 'rename',
-                                child: Text('重命名'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Text('删除'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                return GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    Style.safeSpace,
+                    4,
+                    Style.safeSpace,
+                    88,
                   ),
+                  gridDelegate: Grid.videoCardHDelegate(),
+                  itemCount: _playlists.length,
+                  itemBuilder: (context, index) =>
+                      _playlistTile(theme, _playlists[index]),
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _create,
+        icon: const Icon(Icons.add),
+        label: const Text('新建列表'),
+      ),
     );
   }
 }
 
-/// 单个播放列表详情
+/// 单个播放列表详情（随宽度自适应列数）
 class LocalVideoPlaylistDetailPage extends StatefulWidget {
   const LocalVideoPlaylistDetailPage({
     super.key,
     required this.playlistId,
     required this.title,
-    this.autoPlay = false,
   });
 
   final int playlistId;
   final String title;
-  final bool autoPlay;
 
   @override
   State<LocalVideoPlaylistDetailPage> createState() =>
@@ -293,20 +294,11 @@ class _LocalVideoPlaylistDetailPageState
   void initState() {
     super.initState();
     _refresh();
-    if (widget.autoPlay) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _list.isNotEmpty) _playFrom(0);
-      });
-    }
   }
 
   void _refresh() {
     try {
       final items = Pref.getLocalVideoPlaylistItems(widget.playlistId);
-      items.sort((a, b) => Pref.natCompareTitle(
-            '${a['title'] ?? ''}',
-            '${b['title'] ?? ''}',
-          ));
       setState(() {
         _list = items;
         _error = null;
@@ -322,13 +314,7 @@ class _LocalVideoPlaylistDetailPageState
   String _key(Map item) => item['bvid'] as String? ?? 'av${item['aid']}';
 
   List<Map> _toArgMaps() {
-    // 保证传给播放页的顺序为自然排序
-    final sorted = List<Map>.from(_list);
-    sorted.sort((a, b) => Pref.natCompareTitle(
-          '${a['title'] ?? ''}',
-          '${b['title'] ?? ''}',
-        ));
-    return sorted
+    return _list
         .map(
           (e) => {
             'aid': _asInt(e['aid']),
@@ -365,16 +351,8 @@ class _LocalVideoPlaylistDetailPageState
       maps[index]['cid'] = cid;
       maps[index]['aid'] = aid;
     }
-    // 写入 GlobalData + Pref 持久化 playlistId（侧栏只从 Pref 读）
-    final gd = GlobalData();
-    gd.pendingLocalMediaList = maps;
-    gd.pendingLocalMediaTitle = widget.title;
-    gd.pendingLocalPlaylistId = widget.playlistId;
-    gd.sessionLocalMediaList = maps;
-    gd.sessionLocalMediaTitle = widget.title;
-    gd.sessionLocalPlaylistId = widget.playlistId;
-    Pref.lastLocalPlaylistId = widget.playlistId;
-    Pref.lastLocalPlaylistTitle = widget.title;
+    GlobalData().pendingLocalMediaList = maps;
+    GlobalData().pendingLocalMediaTitle = widget.title;
     PageUtils.toVideoPage(
       bvid: bvid,
       aid: aid,
@@ -387,7 +365,6 @@ class _LocalVideoPlaylistDetailPageState
         'desc': true,
         'count': maps.length,
         'localMediaList': maps,
-        'localPlaylistId': widget.playlistId,
         'oid': aid,
       },
     );
@@ -522,6 +499,150 @@ class _LocalVideoPlaylistDetailPageState
     }
   }
 
+  Widget _videoTile(ThemeData theme, int index, Map item) {
+    final title = item['title'] as String? ?? '';
+    final cover = item['cover'] as String?;
+    final author = item['authorName'] as String? ?? '';
+    final duration = _asInt(item['duration']) ?? 0;
+    final k = _key(item);
+    final selected = _selected.contains(k);
+    final outline = theme.colorScheme.outline;
+    return Material(
+      type: MaterialType.transparency,
+      color: selected
+          ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.35)
+          : null,
+      child: InkWell(
+        onTap: () {
+          if (_multi) {
+            setState(() {
+              if (selected) {
+                _selected.remove(k);
+              } else {
+                _selected.add(k);
+              }
+            });
+          } else {
+            _playFrom(index);
+          }
+        },
+        onLongPress: () {
+          if (!_multi) {
+            setState(() {
+              _multi = true;
+              _selected.add(k);
+            });
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Style.safeSpace,
+            vertical: 5,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_multi)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, top: 28),
+                  child: Icon(
+                    selected
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                    size: 22,
+                    color: selected
+                        ? theme.colorScheme.primary
+                        : outline,
+                  ),
+                ),
+              AspectRatio(
+                aspectRatio: Style.aspectRatio,
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        NetworkImgLayer(
+                          src: cover,
+                          width: c.maxWidth,
+                          height: c.maxHeight,
+                        ),
+                        if (duration > 0)
+                          Positioned(
+                            right: 4,
+                            bottom: 4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: Text(
+                                DurationUtils.formatDuration(duration),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 85,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title.isEmpty ? '无标题' : title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: theme.textTheme.bodyMedium!.fontSize,
+                          height: 1.42,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (author.isNotEmpty)
+                        Text(
+                          author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: outline),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!_multi)
+                IconButton(
+                  tooltip: '移除',
+                  icon: const Icon(Icons.close_outlined, size: 18),
+                  onPressed: () {
+                    Pref.removeLocalVideoPlaylistItem(
+                      playlistId: widget.playlistId,
+                      aid: _asInt(item['aid']),
+                      bvid: item['bvid'] as String?,
+                    );
+                    _refresh();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -562,185 +683,63 @@ class _LocalVideoPlaylistDetailPageState
                 _multi = false;
                 _selected.clear();
               }),
-              child: const Text('完成'),
+              child: const Text('取消'),
             ),
           ] else ...[
-            if (_list.isNotEmpty)
-              TextButton(
-                onPressed: () => _playFrom(0),
-                child: const Text('连续播放'),
-              ),
             IconButton(
-              tooltip: '从历史加入',
-              icon: const Icon(Icons.history),
+              tooltip: '从历史多选加入',
+              icon: const Icon(Icons.playlist_add),
               onPressed: _addFromHistory,
             ),
             if (_list.isNotEmpty)
               IconButton(
                 tooltip: '多选',
-                icon: const Icon(Icons.checklist_rtl),
+                icon: const Icon(Icons.checklist),
                 onPressed: () => setState(() => _multi = true),
               ),
-            const SizedBox(width: 6),
+            if (_list.isNotEmpty)
+              TextButton(
+                onPressed: () => _playFrom(0),
+                child: const Text('连续播放'),
+              ),
+            const SizedBox(width: 4),
           ],
         ],
       ),
       body: _error != null
-          ? Center(child: Text('加载失败\n$_error', textAlign: TextAlign.center))
+          ? Center(
+              child: Text('加载失败\n$_error', textAlign: TextAlign.center),
+            )
           : _list.isEmpty
           ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('列表为空', style: TextStyle(color: outline)),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _addFromHistory,
-                    child: const Text('从历史加入'),
-                  ),
-                ],
+              child: Text(
+                '列表为空\n视频菜单可加入，或点右上角从历史多选加入',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(color: outline),
               ),
             )
-          : ListView.builder(
-              itemCount: _list.length,
-              itemBuilder: (context, index) {
-                final item = _list[index];
-                final title = item['title'] as String? ?? '';
-                final cover = item['cover'] as String?;
-                final author = item['authorName'] as String? ?? '';
-                final duration = _asInt(item['duration']) ?? 0;
-                final k = _key(item);
-                final selected = _selected.contains(k);
-                return Material(
-                  type: MaterialType.transparency,
-                  color: selected
-                      ? theme.colorScheme.secondaryContainer
-                          .withValues(alpha: 0.4)
-                      : null,
-                  child: InkWell(
-                    onTap: () {
-                      if (_multi) {
-                        setState(() {
-                          if (selected) {
-                            _selected.remove(k);
-                          } else {
-                            _selected.add(k);
-                          }
-                        });
-                      } else {
-                        _playFrom(index);
-                      }
-                    },
-                    onLongPress: () {
-                      if (!_multi) {
-                        setState(() {
-                          _multi = true;
-                          _selected.add(k);
-                        });
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Style.safeSpace,
-                        vertical: 5,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_multi)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8, top: 20),
-                              child: Checkbox(
-                                value: selected,
-                                onChanged: (v) {
-                                  setState(() {
-                                    if (v == true) {
-                                      _selected.add(k);
-                                    } else {
-                                      _selected.remove(k);
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          AspectRatio(
-                            aspectRatio: Style.aspectRatio,
-                            child: LayoutBuilder(
-                              builder: (context, boxConstraints) {
-                                final w = boxConstraints.maxWidth;
-                                final h = boxConstraints.maxHeight;
-                                return Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    NetworkImgLayer(
-                                      src: cover,
-                                      width: w,
-                                      height: h,
-                                    ),
-                                    if (duration > 0)
-                                      PBadge(
-                                        text: DurationUtils.formatDuration(
-                                          duration,
-                                        ),
-                                        right: 6.0,
-                                        bottom: 6.0,
-                                        type: PBadgeType.gray,
-                                      ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: SizedBox(
-                              height: 85,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title.isEmpty ? '无标题' : title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: theme
-                                          .textTheme.bodyMedium!.fontSize,
-                                      height: 1.42,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  if (author.isNotEmpty)
-                                    Text(
-                                      author,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: outline,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (!_multi)
-                            IconButton(
-                              tooltip: '移除',
-                              icon: const Icon(Icons.close_outlined, size: 18),
-                              onPressed: () {
-                                Pref.removeLocalVideoPlaylistItem(
-                                  playlistId: widget.playlistId,
-                                  aid: _asInt(item['aid']),
-                                  bvid: item['bvid'] as String?,
-                                );
-                                _refresh();
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 600;
+                if (!wide) {
+                  return ListView.builder(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    itemCount: _list.length,
+                    itemBuilder: (context, index) =>
+                        _videoTile(theme, index, _list[index]),
+                  );
+                }
+                return GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(
+                    Style.safeSpace,
+                    4,
+                    Style.safeSpace,
+                    24,
                   ),
+                  gridDelegate: Grid.videoCardHDelegate(),
+                  itemCount: _list.length,
+                  itemBuilder: (context, index) =>
+                      _videoTile(theme, index, _list[index]),
                 );
               },
             ),
