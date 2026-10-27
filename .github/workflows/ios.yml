@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-macos-app:
     name: Release IOS
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
