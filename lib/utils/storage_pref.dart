@@ -331,11 +331,47 @@ abstract final class Pref {
     return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
+  /// 自然排序：1-1, 1-2, … 1-10, 1-11（而非字符串序 1-1, 1-10, 1-2）
+  static final RegExp _natChunk = RegExp(r'(\d+)|(\D+)');
+
+  static List<Object> _natKey(String s) {
+    final key = <Object>[];
+    for (final m in _natChunk.allMatches(s.toLowerCase())) {
+      if (m.group(1) != null) {
+        key.add(int.tryParse(m.group(1)!) ?? 0);
+      } else {
+        key.add(m.group(2) ?? '');
+      }
+    }
+    return key;
+  }
+
+  static int _natCompare(String a, String b) {
+    final ka = _natKey(a);
+    final kb = _natKey(b);
+    final n = ka.length < kb.length ? ka.length : kb.length;
+    for (var i = 0; i < n; i++) {
+      final x = ka[i];
+      final y = kb[i];
+      if (x is int && y is int) {
+        final c = x.compareTo(y);
+        if (c != 0) return c;
+      } else if (x is String && y is String) {
+        final c = x.compareTo(y);
+        if (c != 0) return c;
+      } else {
+        // 数字优先于文字，保持稳定
+        return x is int ? -1 : 1;
+      }
+    }
+    return ka.length.compareTo(kb.length);
+  }
+
   static void _sortItems(List<Map> items) {
     items.sort((a, b) {
-      final ta = '${a['title'] ?? ''}'.toLowerCase();
-      final tb = '${b['title'] ?? ''}'.toLowerCase();
-      return ta.compareTo(tb);
+      final ta = '${a['title'] ?? ''}';
+      final tb = '${b['title'] ?? ''}';
+      return _natCompare(ta, tb);
     });
   }
 
@@ -403,7 +439,9 @@ abstract final class Pref {
     }
     final items = pl['items'];
     if (items is! List) return <Map>[];
-    return _normMapList(items);
+    final list = _normMapList(items);
+    _sortItems(list);
+    return list;
   }
 
   static void _setPlaylistItems(int playlistId, List<Map> items) {
