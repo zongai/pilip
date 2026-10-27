@@ -315,6 +315,8 @@ class MainController extends GetxController
             .home => homeController.onRefresh(),
             .dynamics => dynamicController.onRefresh(),
             .mine => null,
+            .follow => null,
+            .season => null,
           },
         );
       } else {

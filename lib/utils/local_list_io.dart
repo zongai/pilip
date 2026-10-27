@@ -33,7 +33,6 @@ abstract final class LocalListIo {
     await StorageUtils.saveBytes2File(
       name: fileName,
       bytes: bytes,
-      allowedExtensions: const ['json'],
     );
   }
 
@@ -41,7 +40,7 @@ abstract final class LocalListIo {
   static Future<List?> import({required String expectedType}) async {
     try {
       final result = await FilePicker.pickFile(
-        type: FileType.custom,
+        type: .custom,
         allowedExtensions: const ['json'],
       );
       if (result == null) {

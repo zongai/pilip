@@ -3,8 +3,6 @@ import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 黑名单管理（无需登录）
@@ -50,35 +48,7 @@ class _LocalBlackListPageState extends State<LocalBlackListPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-      floatingActionButton: ScrollToTopButton(
-              controller: _scrollController,
-              onPressed: _scrollController.animToTop,
-              heroTag: 'local_blacklist_scroll_to_top',
-            ),
-      appBar: AppBar(
-        title: Text('黑名单管理${_mids.isEmpty ? '' : ': ${_mids.length}'}'),
-        actions: [
-          PopupMenuButton<String>(
-            tooltip: '导入导出',
-            onSelected: (v) async {
-              if (v == 'export') {
-                await LocalListIo.exportBlacklist();
-              } else if (v == 'import_merge') {
-                await LocalListIo.importBlacklist();
-                _refresh();
-              } else if (v == 'import_replace') {
-                await LocalListIo.importBlacklist(replace: true);
-                _refresh();
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'export', child: Text('导出为 JSON')),
-              PopupMenuItem(value: 'import_merge', child: Text('导入（合并）')),
-              PopupMenuItem(value: 'import_replace', child: Text('导入（覆盖）')),
-            ],
-          ),
-        ],
-      ),
+
       body: _mids.isEmpty
           ? Center(
               child: Column(

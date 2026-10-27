@@ -5,8 +5,6 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 本地播放列表收藏（无需登录）
@@ -74,38 +72,7 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-      floatingActionButton: Builder(
-        builder: (context) => ScrollToTopButton(
-              controller: _scrollController,
-              onPressed: _scrollController.animToTop,
-              heroTag: 'local_playlist_scroll_to_top',
-              extraBottom: mainNavExtraBottom(context),
-            ),
-      ),
-      appBar: AppBar(
-        title: Text(
-          '本地播放列表${_list.isEmpty ? '' : ' · ${_list.length}'}',
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            tooltip: '导入导出',
-            onSelected: (v) {
-              if (v == 'export') {
-                _export();
-              } else if (v == 'import_merge') {
-                _import();
-              } else if (v == 'import_replace') {
-                _import(replace: true);
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'export', child: Text('导出为 JSON')),
-              PopupMenuItem(value: 'import_merge', child: Text('导入（合并）')),
-              PopupMenuItem(value: 'import_replace', child: Text('导入（覆盖）')),
-            ],
-          ),
-        ],
-      ),
+
       body: _list.isEmpty
           ? Center(
               child: Column(

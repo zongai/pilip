@@ -6,8 +6,6 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:PiliPlus/common/widgets/scroll_to_top_button.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// 本地稍后再看（无需登录）
@@ -77,25 +75,7 @@ class _LocalLaterPageState extends State<LocalLaterPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-      floatingActionButton: ScrollToTopButton(
-              controller: _scrollController,
-              onPressed: _scrollController.animToTop,
-              heroTag: 'local_later_scroll_to_top',
-            ),
-      appBar: AppBar(
-        title: Text('本地稍后再看${_list.isEmpty ? '' : ' · ${_list.length}'}'),
-        actions: [
-          if (_list.isNotEmpty)
-            TextButton(
-              onPressed: () {
-                Pref.clearLocalLater();
-                SmartDialog.showToast('已清空');
-                _refresh();
-              },
-              child: const Text('清空'),
-            ),
-        ],
-      ),
+
       body: _list.isEmpty
           ? Center(
               child: Text(
