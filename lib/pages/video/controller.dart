@@ -4,6 +4,7 @@ import 'dart:math' show min;
 import 'dart:ui';
 
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
@@ -58,6 +59,7 @@ import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/nested_scroll_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
+import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/reply_scheme_helper.dart';
@@ -718,10 +720,24 @@ class VideoDetailController extends GetxController
       final screenH = MediaQuery.sizeOf(context).height;
       // 固定高度，避免 Expanded 在 bottom sheet 里高度为 0
       Widget localPanel() {
+        final theme = Theme.of(context);
+        final cs = theme.colorScheme;
+        // 当前项索引，用于初始滚动
+        int currIndex = 0;
+        for (var i = 0; i < raw.length; i++) {
+          final bv = raw[i]['bvid']?.toString();
+          if (bv != null && bv.isNotEmpty && bv == currentBvid) {
+            currIndex = i;
+            break;
+          }
+        }
+        final scrollCtrl = ScrollController(
+          initialScrollOffset: currIndex > 0 ? currIndex * 84.0 : 0,
+        );
         return Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: cs.surface,
           child: SizedBox(
-            height: screenH * 0.55,
+            height: screenH * 0.58,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -730,90 +746,150 @@ class VideoDetailController extends GetxController
                   child: Row(
                     children: [
                       const SizedBox(width: 16),
+                      Icon(Icons.queue_music, size: 20, color: cs.primary),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '${panelTitle.isNotEmpty ? panelTitle : '本地播放列表'} · ${raw.length}',
-                          style: const TextStyle(fontSize: 16),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       IconButton(
+                        tooltip: '关闭',
                         icon: const Icon(Icons.close, size: 20),
                         onPressed: Get.back,
                       ),
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: cs.outlineVariant),
                 Expanded(
                   child: ListView.builder(
+                    controller: scrollCtrl,
                     itemCount: raw.length,
                     itemBuilder: (context, index) {
                       final m = raw[index];
                       final t = '${m['title'] ?? ''}';
                       final cover = '${m['cover'] ?? ''}';
                       final itemBvid = m['bvid']?.toString();
+                      final duration = asInt(m['duration']) ?? 0;
                       final isCurr = itemBvid != null &&
                           itemBvid.isNotEmpty &&
                           itemBvid == currentBvid;
-                      return ListTile(
-                        dense: true,
-                        selected: isCurr,
-                        leading: cover.isNotEmpty
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.network(
-                                  cover,
-                                  width: 64,
-                                  height: 40,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      const SizedBox(width: 64, height: 40),
+                      return Material(
+                        color: isCurr
+                            ? cs.primaryContainer.withValues(alpha: 0.45)
+                            : null,
+                        child: InkWell(
+                          onTap: () {
+                            Get.back();
+                            final targetAid = asInt(m['aid']);
+                            MediaListItemModel? ep;
+                            if (mediaList.isNotEmpty) {
+                              final i = mediaList.indexWhere((e) {
+                                if (itemBvid != null &&
+                                    itemBvid.isNotEmpty &&
+                                    e.bvid == itemBvid) {
+                                  return true;
+                                }
+                                return targetAid != null && e.aid == targetAid;
+                              });
+                              if (i >= 0) ep = mediaList[i];
+                            }
+                            final cid = asInt(m['cid']);
+                            ep ??= MediaListItemModel(
+                              aid: targetAid,
+                              bvid: itemBvid,
+                              title: t,
+                              cover: cover,
+                              duration: duration,
+                              type: 2,
+                              cid: cid,
+                              pages: cid != null
+                                  ? [media_page.Page(id: cid)]
+                                  : null,
+                            );
+                            try {
+                              ugcIntroCtr.onChangeEpisode(ep);
+                            } catch (_) {}
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 26,
+                                  child: isCurr
+                                      ? Icon(Icons.play_arrow,
+                                          size: 18, color: cs.primary)
+                                      : Text(
+                                          '${index + 1}',
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(color: cs.outline),
+                                        ),
                                 ),
-                              )
-                            : const SizedBox(width: 64, height: 40),
-                        title: Text(
-                          t.isEmpty ? '无标题' : t,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isCurr
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Stack(
+                                    children: [
+                                      NetworkImgLayer(
+                                        width: 96,
+                                        height: 54,
+                                        src: cover.isEmpty ? null : cover,
+                                      ),
+                                      if (duration > 0)
+                                        Positioned(
+                                          right: 3,
+                                          bottom: 3,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 3,
+                                              vertical: 1,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black87,
+                                              borderRadius:
+                                                  BorderRadius.circular(2),
+                                            ),
+                                            child: Text(
+                                              DurationUtils.formatDuration(
+                                                  duration),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    t.isEmpty ? '无标题' : t,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isCurr
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                      color: isCurr ? cs.primary : null,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        onTap: () {
-                          Get.back();
-                          final targetAid = asInt(m['aid']);
-                          MediaListItemModel? ep;
-                          if (mediaList.isNotEmpty) {
-                            final i = mediaList.indexWhere((e) {
-                              if (itemBvid != null &&
-                                  itemBvid.isNotEmpty &&
-                                  e.bvid == itemBvid) {
-                                return true;
-                              }
-                              return targetAid != null && e.aid == targetAid;
-                            });
-                            if (i >= 0) ep = mediaList[i];
-                          }
-                          final cid = asInt(m['cid']);
-                          ep ??= MediaListItemModel(
-                            aid: targetAid,
-                            bvid: itemBvid,
-                            title: t,
-                            cover: cover,
-                            duration: asInt(m['duration']),
-                            type: 2,
-                            cid: cid,
-                            pages: cid != null
-                                ? [media_page.Page(id: cid)]
-                                : null,
-                          );
-                          try {
-                            ugcIntroCtr.onChangeEpisode(ep);
-                          } catch (_) {}
-                        },
                       );
                     },
                   ),
