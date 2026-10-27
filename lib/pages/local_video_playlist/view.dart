@@ -4,7 +4,6 @@ import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/global_data.dart';
-import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -155,13 +154,14 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, c) => NetworkImgLayer(
+              SizedBox(
+                width: 140,
+                child: AspectRatio(
+                  aspectRatio: Style.aspectRatio,
+                  child: NetworkImgLayer(
                     src: cover,
-                    width: c.maxWidth,
-                    height: c.maxHeight,
+                    width: 140,
+                    height: 140 / Style.aspectRatio,
                   ),
                 ),
               ),
@@ -235,26 +235,22 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
           ? Center(child: Text('暂无播放列表', style: TextStyle(color: outline)))
           : LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 600;
-                if (!wide) {
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 88),
-                    itemCount: _playlists.length,
-                    itemBuilder: (context, index) =>
-                        _playlistTile(theme, _playlists[index]),
-                  );
-                }
-                return GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    Style.safeSpace,
-                    4,
-                    Style.safeSpace,
-                    88,
-                  ),
-                  gridDelegate: Grid.videoCardHDelegate(),
+                final list = ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 88),
                   itemCount: _playlists.length,
                   itemBuilder: (context, index) =>
                       _playlistTile(theme, _playlists[index]),
+                );
+                // 宽屏：居中限制最大宽度，多列网格在详情页使用
+                if (constraints.maxWidth < 720) return list;
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: constraints.maxWidth >= 1200 ? 960 : 720,
+                    ),
+                    child: list,
+                  ),
                 );
               },
             ),
@@ -555,43 +551,42 @@ class _LocalVideoPlaylistDetailPageState
                         : outline,
                   ),
                 ),
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        NetworkImgLayer(
-                          src: cover,
-                          width: c.maxWidth,
-                          height: c.maxHeight,
-                        ),
-                        if (duration > 0)
-                          Positioned(
-                            right: 4,
-                            bottom: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: Text(
-                                DurationUtils.formatDuration(duration),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                ),
+              SizedBox(
+                width: 140,
+                child: AspectRatio(
+                  aspectRatio: Style.aspectRatio,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      NetworkImgLayer(
+                        src: cover,
+                        width: 140,
+                        height: 140 / Style.aspectRatio,
+                      ),
+                      if (duration > 0)
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              DurationUtils.formatDuration(duration),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
                               ),
                             ),
                           ),
-                      ],
-                    );
-                  },
+                        ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -720,23 +715,26 @@ class _LocalVideoPlaylistDetailPageState
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 600;
-                if (!wide) {
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    itemCount: _list.length,
-                    itemBuilder: (context, index) =>
-                        _videoTile(theme, index, _list[index]),
-                  );
+                Widget list({EdgeInsetsGeometry? padding}) => ListView.builder(
+                      padding: padding ?? const EdgeInsets.only(bottom: 24),
+                      itemCount: _list.length,
+                      itemBuilder: (context, index) =>
+                          _videoTile(theme, index, _list[index]),
+                    );
+                if (constraints.maxWidth < 720) {
+                  return list();
                 }
+                // 宽屏多列
                 return GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(
-                    Style.safeSpace,
-                    4,
-                    Style.safeSpace,
-                    24,
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: constraints.maxWidth >= 1100
+                        ? 520
+                        : 480,
+                    mainAxisExtent: 100,
+                    mainAxisSpacing: 2,
+                    crossAxisSpacing: 4,
                   ),
-                  gridDelegate: Grid.videoCardHDelegate(),
                   itemCount: _list.length,
                   itemBuilder: (context, index) =>
                       _videoTile(theme, index, _list[index]),
