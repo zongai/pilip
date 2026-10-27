@@ -247,35 +247,130 @@ abstract final class Pref {
     GlobalData().localPlaylistList = list;
   }
 
-  /// 本地视频播放列表（按标题排序）[{aid,bvid,cid,title,cover,authorName,authorMid,duration}, ...]
-  static List<Map> get localVideoPlaylist {
+  /// 多播放列表：[{id,title,items:[{aid,bvid,cid,title,cover,authorName,authorMid,duration}]}]
+  /// 兼容旧版扁平列表自动迁移为「默认列表」
+  static List<Map> get localVideoPlaylists {
     final raw = _localCache.get(LocalCacheKey.localVideoPlaylist, defaultValue: <dynamic>[]);
-    if (raw is! List) return <Map>[];
-    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (raw is! List || raw.isEmpty) return <Map>[];
+    // 旧格式：直接是视频 item
+    final first = raw.first;
+    if (first is Map && first.containsKey('items')) {
+      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    // 迁移
+    final items = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final migrated = [
+      {
+        'id': DateTime.now().millisecondsSinceEpoch,
+        'title': '默认列表',
+        'items': items,
+      }
+    ];
+    localVideoPlaylists = migrated;
+    return migrated;
   }
 
-  static set localVideoPlaylist(List<Map> list) =>
-      _localCache.put(LocalCacheKey.localVideoPlaylist, list);
+  static set localVideoPlaylists(List<Map> list) {
+    _localCache.put(LocalCacheKey.localVideoPlaylist, list);
+    GlobalData().localVideoPlaylists = list;
+  }
 
-  static void _syncLocalVideoPlaylist(List<Map> list) {
-    list.sort((a, b) {
+  /// 兼容：默认列表的 items
+  static List<Map> get localVideoPlaylist {
+    final pls = localVideoPlaylists;
+    if (pls.isEmpty) return <Map>[];
+    final items = pls.first['items'];
+    if (items is! List) return <Map>[];
+    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static void _sortItems(List<Map> items) {
+    items.sort((a, b) {
       final ta = (a['title'] as String? ?? '').toLowerCase();
       final tb = (b['title'] as String? ?? '').toLowerCase();
       return ta.compareTo(tb);
     });
-    localVideoPlaylist = list;
-    GlobalData().localVideoPlaylistList = list;
   }
 
-  static bool isInLocalVideoPlaylist({int? aid, String? bvid}) {
+  static Map _ensureDefaultPlaylist() {
+    final pls = List<Map>.from(localVideoPlaylists);
+    if (pls.isEmpty) {
+      final pl = {
+        'id': DateTime.now().millisecondsSinceEpoch,
+        'title': '默认列表',
+        'items': <Map>[],
+      };
+      pls.add(pl);
+      localVideoPlaylists = pls;
+      return pl;
+    }
+    return Map<String, dynamic>.from(pls.first);
+  }
+
+  static int createLocalVideoPlaylist(String title) {
+    final id = DateTime.now().millisecondsSinceEpoch;
+    final pls = List<Map>.from(localVideoPlaylists);
+    pls.add({'id': id, 'title': title, 'items': <Map>[]});
+    localVideoPlaylists = pls;
+    return id;
+  }
+
+  static void renameLocalVideoPlaylist(int id, String title) {
+    final pls = List<Map>.from(localVideoPlaylists);
+    for (var i = 0; i < pls.length; i++) {
+      if (pls[i]['id'] == id) {
+        pls[i] = {...Map<String, dynamic>.from(pls[i]), 'title': title};
+        break;
+      }
+    }
+    localVideoPlaylists = pls;
+  }
+
+  static void deleteLocalVideoPlaylist(int id) {
+    final pls = List<Map>.from(localVideoPlaylists)..removeWhere((e) => e['id'] == id);
+    localVideoPlaylists = pls;
+  }
+
+  static List<Map> getLocalVideoPlaylistItems(int? playlistId) {
+    final pls = localVideoPlaylists;
+    if (pls.isEmpty) return <Map>[];
+    Map pl;
+    if (playlistId == null) {
+      pl = Map<String, dynamic>.from(pls.first);
+    } else {
+      pl = Map<String, dynamic>.from(
+        pls.firstWhere((e) => e['id'] == playlistId, orElse: () => pls.first),
+      );
+    }
+    final items = pl['items'];
+    if (items is! List) return <Map>[];
+    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static void _setPlaylistItems(int playlistId, List<Map> items) {
+    _sortItems(items);
+    final pls = List<Map>.from(localVideoPlaylists);
+    for (var i = 0; i < pls.length; i++) {
+      if (pls[i]['id'] == playlistId) {
+        pls[i] = {
+          ...Map<String, dynamic>.from(pls[i]),
+          'items': items,
+        };
+        break;
+      }
+    }
+    localVideoPlaylists = pls;
+  }
+
+  static bool isInLocalVideoPlaylist({int? aid, String? bvid, int? playlistId}) {
     final key = bvid ?? (aid != null ? 'av$aid' : null);
     if (key == null) return false;
-    return GlobalData().localVideoPlaylistList.any(
-      (e) => (e['bvid'] ?? 'av${e['aid']}') == key,
-    );
+    final items = getLocalVideoPlaylistItems(playlistId);
+    return items.any((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
   }
 
   static void addLocalVideoPlaylistItem({
+    int? playlistId,
     int? aid,
     String? bvid,
     int? cid,
@@ -286,7 +381,16 @@ abstract final class Pref {
     int? duration,
   }) {
     if ((bvid == null || bvid.isEmpty) && aid == null) return;
-    final list = List<Map>.from(localVideoPlaylist);
+    final pl = playlistId == null
+        ? _ensureDefaultPlaylist()
+        : Map<String, dynamic>.from(
+            localVideoPlaylists.firstWhere(
+              (e) => e['id'] == playlistId,
+              orElse: () => _ensureDefaultPlaylist(),
+            ),
+          );
+    final id = pl['id'] as int;
+    final list = getLocalVideoPlaylistItems(id);
     final key = bvid ?? 'av$aid';
     list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
     list.add({
@@ -299,11 +403,20 @@ abstract final class Pref {
       'authorMid': authorMid,
       'duration': duration ?? 0,
     });
-    _syncLocalVideoPlaylist(list);
+    _setPlaylistItems(id, list);
   }
 
-  static void addLocalVideoPlaylistItems(List<Map> items) {
-    final list = List<Map>.from(localVideoPlaylist);
+  static void addLocalVideoPlaylistItems(List<Map> items, {int? playlistId}) {
+    final pl = playlistId == null
+        ? _ensureDefaultPlaylist()
+        : Map<String, dynamic>.from(
+            localVideoPlaylists.firstWhere(
+              (e) => e['id'] == playlistId,
+              orElse: () => _ensureDefaultPlaylist(),
+            ),
+          );
+    final id = pl['id'] as int;
+    final list = getLocalVideoPlaylistItems(id);
     for (final e in items) {
       final aid = e['aid'] as int?;
       final bvid = e['bvid'] as String?;
@@ -321,23 +434,34 @@ abstract final class Pref {
         'duration': e['duration'] ?? 0,
       });
     }
-    _syncLocalVideoPlaylist(list);
+    _setPlaylistItems(id, list);
   }
 
-  static void removeLocalVideoPlaylistItem({int? aid, String? bvid}) {
+  static void removeLocalVideoPlaylistItem({int? playlistId, int? aid, String? bvid}) {
     final key = bvid ?? (aid != null ? 'av$aid' : null);
     if (key == null) return;
-    final list = List<Map>.from(localVideoPlaylist)
+    final pls = localVideoPlaylists;
+    if (pls.isEmpty) return;
+    final id = playlistId ?? pls.first['id'] as int;
+    final list = getLocalVideoPlaylistItems(id)
       ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
-    _syncLocalVideoPlaylist(list);
+    _setPlaylistItems(id, list);
   }
 
-  static void clearLocalVideoPlaylist() {
-    _syncLocalVideoPlaylist([]);
+  static void clearLocalVideoPlaylist({int? playlistId}) {
+    final pls = localVideoPlaylists;
+    if (pls.isEmpty) return;
+    final id = playlistId ?? pls.first['id'] as int;
+    _setPlaylistItems(id, []);
   }
 
-  static void replaceLocalVideoPlaylist(List<Map> list) {
-    _syncLocalVideoPlaylist(List<Map>.from(list));
+  static void replaceLocalVideoPlaylist(List<Map> list, {int? playlistId}) {
+    final pls = localVideoPlaylists;
+    if (pls.isEmpty) {
+      createLocalVideoPlaylist('默认列表');
+    }
+    final id = playlistId ?? localVideoPlaylists.first['id'] as int;
+    _setPlaylistItems(id, List<Map>.from(list));
   }
 
 

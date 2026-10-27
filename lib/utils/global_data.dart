@@ -17,6 +17,7 @@ class GlobalData {
   List<Map> localSeasonList = Pref.localSeasons;
   List<Map> localPlaylistList = Pref.localPlaylists;
   List<Map> localVideoPlaylistList = Pref.localVideoPlaylist;
+  List<Map> localVideoPlaylists = Pref.localVideoPlaylists;
   List<Map> localHistoryList = Pref.localHistory;
   List<Map> localLaterList = Pref.localLater;
   Set<int> localFollowMids = {

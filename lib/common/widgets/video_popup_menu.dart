@@ -64,11 +64,46 @@ class VideoPopupMenu extends StatelessWidget {
                   _VideoCustomAction(
                     '加入本地播放列表',
                     const Icon(Icons.playlist_add, size: 16),
-                    () {
+                    () async {
                       final int? aid = videoItem is BaseVideoItemModel
                           ? (videoItem as BaseVideoItemModel).aid
                           : null;
+                      final pls = Pref.localVideoPlaylists;
+                      int? targetId;
+                      if (pls.isEmpty) {
+                        targetId = Pref.createLocalVideoPlaylist('默认列表');
+                      } else if (pls.length == 1) {
+                        targetId = pls.first['id'] as int?;
+                      } else {
+                        targetId = await showDialog<int>(
+                          context: context,
+                          builder: (ctx) => SimpleDialog(
+                            title: const Text('选择播放列表'),
+                            children: [
+                              for (final pl in pls)
+                                SimpleDialogOption(
+                                  onPressed: () =>
+                                      Navigator.pop(ctx, pl['id'] as int),
+                                  child: Text(
+                                    '${pl['title']} (${(pl['items'] is List) ? (pl['items'] as List).length : 0})',
+                                  ),
+                                ),
+                              SimpleDialogOption(
+                                onPressed: () {
+                                  final id = Pref.createLocalVideoPlaylist(
+                                    '列表 ${pls.length + 1}',
+                                  );
+                                  Navigator.pop(ctx, id);
+                                },
+                                child: const Text('+ 新建列表'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      if (targetId == null) return;
                       Pref.addLocalVideoPlaylistItem(
+                        playlistId: targetId,
                         aid: aid,
                         bvid: videoItem.bvid,
                         cid: videoItem.cid,

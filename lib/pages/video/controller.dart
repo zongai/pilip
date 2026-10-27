@@ -28,6 +28,7 @@ import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/media_list/media_list.dart';
+import 'package:PiliPlus/models_new/media_list/page.dart' as media_page;
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
@@ -106,6 +107,7 @@ class VideoDetailController extends GetxController
   late bool isFileSource;
   late bool _mediaDesc = false;
   late final RxList<MediaListItemModel> mediaList = <MediaListItemModel>[].obs;
+  bool isLocalMediaList = false;
   late String watchLaterTitle;
 
   /// tabs相关配置
@@ -446,9 +448,29 @@ class VideoDetailController extends GetxController
       _mediaDesc = args['desc'];
       final local = args['localMediaList'];
       if (local is List && local.isNotEmpty) {
-        mediaList.assignAll(
-          local.whereType<MediaListItemModel>().toList(),
-        );
+        final items = <MediaListItemModel>[];
+        for (final e in local) {
+          if (e is MediaListItemModel) {
+            items.add(e);
+          } else if (e is Map) {
+            final m = Map<String, dynamic>.from(e);
+            final cid = m['cid'] as int?;
+            items.add(MediaListItemModel(
+              aid: m['aid'] as int?,
+              bvid: m['bvid'] as String?,
+              title: m['title'] as String?,
+              cover: m['cover'] as String?,
+              duration: m['duration'] as int?,
+              cid: cid,
+              type: 2,
+              pages: cid != null
+                  ? [media_page.Page(id: cid)]
+                  : null,
+            ));
+          }
+        }
+        mediaList.assignAll(items);
+        isLocalMediaList = true;
       } else {
         getMediaList();
       }
@@ -471,6 +493,7 @@ class VideoDetailController extends GetxController
     bool isReverse = false,
     bool isLoadPrevious = false,
   }) async {
+    if (isLocalMediaList) return;
     final count = args['count'];
     if (!isReverse && count != null && mediaList.length >= count) {
       return;
@@ -541,7 +564,11 @@ class VideoDetailController extends GetxController
         desc: _mediaDesc,
         onReverse: () {
           _mediaDesc = !_mediaDesc;
-          getMediaList(isReverse: true);
+          if (isLocalMediaList) {
+            mediaList.value = mediaList.reversed.toList();
+          } else {
+            getMediaList(isReverse: true);
+          }
         },
         loadPrevious: args['isContinuePlaying'] == true
             ? () => getMediaList(isLoadPrevious: true)

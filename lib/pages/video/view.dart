@@ -1691,7 +1691,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           child: SizedBox(
             height:
                 (videoDetailController.isPlayAll && !isPortrait
-                    ? 80
+                    ? 44
                     : Style.safeSpace) +
                 padding.bottom,
           ),
@@ -1703,34 +1703,37 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       child = IntroLayout(
         body: child,
         playlist: Padding(
-          padding: .only(left: 12, right: 12, bottom: 12 + padding.bottom),
+          padding: .only(left: 12, right: 12, bottom: 6 + padding.bottom),
           child: Material(
             type: .transparency,
             child: InkWell(
               onTap: () => videoDetailController.showMediaListPanel(context),
-              borderRadius: const .all(.circular(14)),
+              borderRadius: const .all(.circular(10)),
               child: Container(
-                height: 54,
-                padding: const .symmetric(horizontal: 16),
+                height: 32,
+                padding: const .symmetric(horizontal: 10),
                 decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer.withValues(alpha: 0.95),
-                  borderRadius: const .all(.circular(14)),
+                  color: colorScheme.secondaryContainer.withValues(alpha: 0.9),
+                  borderRadius: const .all(.circular(10)),
                 ),
                 child: Row(
-                  spacing: 10,
+                  spacing: 6,
                   children: [
-                    const Icon(Icons.playlist_play, size: 24),
+                    const Icon(Icons.playlist_play, size: 18),
                     Expanded(
                       child: Text(
                         videoDetailController.watchLaterTitle,
+                        maxLines: 1,
+                        overflow: .ellipsis,
                         style: TextStyle(
                           color: colorScheme.onSecondaryContainer,
-                          fontWeight: .bold,
-                          letterSpacing: 0.2,
+                          fontWeight: .w600,
+                          fontSize: 12,
+                          letterSpacing: 0.1,
                         ),
                       ),
                     ),
-                    const Icon(Icons.keyboard_arrow_up_rounded, size: 26),
+                    const Icon(Icons.keyboard_arrow_up_rounded, size: 18),
                   ],
                 ),
               ),

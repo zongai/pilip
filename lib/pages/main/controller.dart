@@ -317,6 +317,7 @@ class MainController extends GetxController
             .mine => null,
             .follow => null,
             .season => null,
+            .playlist => null,
           },
         );
       } else {
