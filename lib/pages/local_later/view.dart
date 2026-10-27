@@ -75,7 +75,24 @@ class _LocalLaterPageState extends State<LocalLaterPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-
+      appBar: AppBar(
+        title: Text('稍后再看${_list.isEmpty ? '' : ' · ${_list.length}'}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+        actions: [
+          if (_list.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                Pref.clearLocalLater();
+                SmartDialog.showToast('已清空');
+                _refresh();
+              },
+              child: const Text('清空'),
+            ),
+        ],
+      ),
       body: _list.isEmpty
           ? Center(
               child: Text(

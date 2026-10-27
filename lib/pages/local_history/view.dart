@@ -73,7 +73,24 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-
+      appBar: AppBar(
+        title: Text('观看记录${_list.isEmpty ? '' : ' · ${_list.length}'}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+        actions: [
+          if (_list.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                Pref.clearLocalHistory();
+                SmartDialog.showToast('已清空');
+                _refresh();
+              },
+              child: const Text('清空'),
+            ),
+        ],
+      ),
       body: _list.isEmpty
           ? Center(
               child: Text(

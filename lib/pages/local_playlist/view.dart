@@ -72,7 +72,13 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-
+      appBar: AppBar(
+        title: Text('本地播单${_list.isEmpty ? '' : ' · ${_list.length}'}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+      ),
       body: _list.isEmpty
           ? Center(
               child: Column(

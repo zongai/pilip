@@ -48,7 +48,13 @@ class _LocalBlackListPageState extends State<LocalBlackListPage> {
     return PrimaryScrollController(
       controller: _scrollController,
       child: Scaffold(
-
+      appBar: AppBar(
+        title: Text('本地黑名单${_mids.isEmpty ? '' : ' · ${_mids.length}'}'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Get.back(),
+        ),
+      ),
       body: _mids.isEmpty
           ? Center(
               child: Column(
