@@ -719,7 +719,7 @@ class VideoDetailController extends GetxController
       // 固定高度，避免 Expanded 在 bottom sheet 里高度为 0
       Widget localPanel() {
         return Material(
-          color: Get.theme.colorScheme.surface,
+          color: Theme.of(context).colorScheme.surface,
           child: SizedBox(
             height: screenH * 0.55,
             child: Column(
@@ -778,7 +778,7 @@ class VideoDetailController extends GetxController
                           style: TextStyle(
                             fontSize: 13,
                             color: isCurr
-                                ? Get.theme.colorScheme.primary
+                                ? Theme.of(context).colorScheme.primary
                                 : null,
                           ),
                         ),
