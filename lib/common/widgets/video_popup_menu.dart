@@ -80,10 +80,15 @@ class VideoPopupMenu extends StatelessWidget {
                         } else if (videoItem is SpaceArchiveItem) {
                           aid = asInt((videoItem as SpaceArchiveItem).param);
                         }
-                        final bvid = videoItem.bvid;
+                        String? bvid = videoItem.bvid;
                         if (aid == null && bvid != null && bvid.isNotEmpty) {
                           try {
                             aid = IdUtils.bv2av(bvid);
+                          } catch (_) {}
+                        }
+                        if ((bvid == null || bvid.isEmpty) && aid != null) {
+                          try {
+                            bvid = IdUtils.av2bv(aid);
                           } catch (_) {}
                         }
                         if ((bvid == null || bvid.isEmpty) && aid == null) {

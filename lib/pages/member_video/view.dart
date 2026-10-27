@@ -15,6 +15,7 @@ import 'package:PiliPlus/pages/member_video/widgets/video_card_h_member_video.da
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
@@ -328,12 +329,18 @@ class _MemberVideoState extends State<MemberVideo>
       SmartDialog.showToast('请先选择视频');
       return;
     }
+    int? asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v');
+    }
     final pls = Pref.localVideoPlaylists;
     int? targetId;
     if (pls.isEmpty) {
       targetId = Pref.createLocalVideoPlaylist('默认列表');
     } else if (pls.length == 1) {
-      targetId = pls.first['id'] as int?;
+      targetId = asInt(pls.first['id']);
     } else {
       targetId = await showDialog<int>(
         context: context,
@@ -342,7 +349,7 @@ class _MemberVideoState extends State<MemberVideo>
           children: [
             for (final pl in pls)
               SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, pl['id'] as int),
+                onPressed: () => Navigator.pop(ctx, asInt(pl['id'])),
                 child: Text(
                   '${pl['title']} (${(pl['items'] is List) ? (pl['items'] as List).length : 0})',
                 ),
@@ -359,19 +366,40 @@ class _MemberVideoState extends State<MemberVideo>
       );
     }
     if (targetId == null) return;
+    final maps = <Map>[];
+    for (final e in items) {
+      int? aid = asInt(e.param);
+      String? bvid = e.bvid;
+      if ((bvid == null || bvid.isEmpty) && aid != null) {
+        try {
+          bvid = IdUtils.av2bv(aid);
+        } catch (_) {}
+      }
+      if (aid == null && bvid != null && bvid.isNotEmpty) {
+        try {
+          aid = IdUtils.bv2av(bvid);
+        } catch (_) {}
+      }
+      if ((bvid == null || bvid.isEmpty) && aid == null) continue;
+      maps.add({
+        'aid': aid,
+        'bvid': bvid,
+        'cid': e.cid,
+        'title': e.title,
+        'cover': e.cover,
+        'authorName': e.owner.name,
+        'authorMid': (e.owner.mid == null || e.owner.mid == 0)
+            ? widget.mid
+            : e.owner.mid,
+        'duration': e.duration > 0 ? e.duration : 0,
+      });
+    }
+    if (maps.isEmpty) {
+      SmartDialog.showToast('无法获取视频信息');
+      return;
+    }
     Pref.addLocalVideoPlaylistItems(
-      items
-          .map((e) => {
-                'aid': null,
-                'bvid': e.bvid ?? e.param,
-                'cid': e.cid,
-                'title': e.title,
-                'cover': e.cover,
-                'authorName': e.owner?.name,
-                'authorMid': e.owner?.mid == 0 ? widget.mid : e.owner?.mid,
-                'duration': e.duration > 0 ? e.duration : 0,
-              })
-          .toList(),
+      maps,
       playlistId: targetId,
     );
     SmartDialog.showToast('已加入 ${items.length} 个视频');

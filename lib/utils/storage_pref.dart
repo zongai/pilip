@@ -488,7 +488,7 @@ abstract final class Pref {
       Map? found;
       for (final e in localVideoPlaylists) {
         if (_plId(e['id']) == playlistId) {
-          found = Map<String, dynamic>.from(e);
+          found = _normMap(e);
           break;
         }
       }
@@ -497,21 +497,23 @@ abstract final class Pref {
     final id = _plId(pl['id']) ?? playlistId ?? DateTime.now().millisecondsSinceEpoch;
     final list = getLocalVideoPlaylistItems(id);
     for (final e in items) {
-      final aid = e['aid'] as int?;
-      final bvid = e['bvid'] as String?;
+      final m = _normMap(e);
+      final aid = _plId(m['aid']);
+      final bvidRaw = m['bvid']?.toString();
+      final bvid = (bvidRaw == null || bvidRaw.isEmpty) ? null : bvidRaw;
       if ((bvid == null || bvid.isEmpty) && aid == null) continue;
       final key = bvid ?? 'av$aid';
       list.removeWhere((x) => (x['bvid'] ?? 'av${x['aid']}') == key);
-      list.add({
+      list.add(_normMap({
         'aid': aid,
         'bvid': bvid,
-        'cid': e['cid'],
-        'title': e['title'] ?? '',
-        'cover': e['cover'] ?? '',
-        'authorName': e['authorName'] ?? '',
-        'authorMid': e['authorMid'],
-        'duration': e['duration'] ?? 0,
-      });
+        'cid': _plId(m['cid']),
+        'title': '${m['title'] ?? ''}',
+        'cover': '${m['cover'] ?? ''}',
+        'authorName': '${m['authorName'] ?? ''}',
+        'authorMid': _plId(m['authorMid']),
+        'duration': _plId(m['duration']) ?? 0,
+      }));
     }
     _setPlaylistItems(id, list);
   }
