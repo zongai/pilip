@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "file": "PiliPlus_ios_2.1.6+5589.ipa",
+      "file": "PiliPlus_ios_2.1.6+5594.ipa",
       "bundleIdentifier": "com.example.piliplus",
       "name": "PiliPlus",
       "developerName": "zongai",
@@ -9,10 +9,10 @@
       "localizedDescription": "使用 Flutter 开发的 BiliBili 第三方客户端。支持本地关注、黑名单、播单、历史与稍后再看（无需登录）。",
       "iconURL": "https://raw.githubusercontent.com/zongai/zoo/refs/heads/main/pili.png",
       "tintColor": "FB7299",
-      "version": "2.1.6+5589",
+      "version": "2.1.6+5594",
       "versionDate": "2026-10-27",
       "category": "photo-video",
-      "versionDescription": "播放页侧栏从 Pref 直读本地播单并固定高度展示；自然排序",
+      "versionDescription": "修复本地播放列表管理页空白与宽屏布局",
       "minOSVersion": "14.0",
       "banner": "https://raw.githubusercontent.com/zongai/zoo/refs/heads/main/banner.png"
     }
