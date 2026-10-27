@@ -63,6 +63,7 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/video_utils.dart';
@@ -438,39 +439,69 @@ class VideoDetailController extends GetxController
     cover = RxString(args['cover'] ?? '');
     isVertical = RxBool(args['isVertical'] ?? false);
 
-    sourceType = args['sourceType'] ?? SourceType.normal;
+    // 本地连播：即使 sourceType 丢失也要从 pending 恢复
+    final pending = GlobalData().pendingLocalMediaList;
+    final hasPendingLocal = pending != null && pending.isNotEmpty;
+    sourceType = args['sourceType'] is SourceType
+        ? args['sourceType'] as SourceType
+        : (hasPendingLocal || args['localMediaList'] is List
+              ? SourceType.watchLater
+              : SourceType.normal);
     isFileSource = sourceType == SourceType.file;
-    isPlayAll = sourceType != SourceType.normal && !isFileSource;
+    isPlayAll = (sourceType != SourceType.normal && !isFileSource) ||
+        hasPendingLocal ||
+        args['localMediaList'] is List;
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
-      watchLaterTitle = args['favTitle'] ?? '播放列表';
-      _mediaDesc = args['desc'];
-      final local = args['localMediaList'];
+      watchLaterTitle =
+          args['favTitle'] ?? GlobalData().pendingLocalMediaTitle ?? '播放列表';
+      _mediaDesc = args['desc'] == true || args['desc'] == 1;
+      final local = args['localMediaList'] ?? GlobalData().pendingLocalMediaList;
       if (local is List && local.isNotEmpty) {
         final items = <MediaListItemModel>[];
-        for (final e in local) {
-          if (e is MediaListItemModel) {
-            items.add(e);
-          } else if (e is Map) {
-            final m = Map<String, dynamic>.from(e);
-            final cid = m['cid'] as int?;
-            items.add(MediaListItemModel(
-              aid: m['aid'] as int?,
-              bvid: m['bvid'] as String?,
-              title: m['title'] as String?,
-              cover: m['cover'] as String?,
-              duration: m['duration'] as int?,
-              cid: cid,
-              type: 2,
-              pages: cid != null
-                  ? [media_page.Page(id: cid)]
-                  : null,
-            ));
-          }
+        int? asInt(dynamic v) {
+          if (v == null) return null;
+          if (v is int) return v;
+          if (v is num) return v.toInt();
+          return int.tryParse('$v');
         }
-        mediaList.assignAll(items);
-        isLocalMediaList = true;
+        for (final e in local) {
+          try {
+            if (e is MediaListItemModel) {
+              items.add(e);
+              continue;
+            }
+            if (e is! Map) continue;
+            final m = Map<String, dynamic>.from(e);
+            final cid = asInt(m['cid']);
+            final aid = asInt(m['aid']);
+            final bvid = m['bvid']?.toString();
+            final title = m['title']?.toString() ?? '';
+            final cover = m['cover']?.toString();
+            final duration = asInt(m['duration']);
+            items.add(
+              MediaListItemModel(
+                aid: aid,
+                bvid: bvid,
+                title: title,
+                cover: cover,
+                duration: duration,
+                type: 2,
+                pages: cid != null ? [media_page.Page(id: cid)] : null,
+              ),
+            );
+          } catch (_) {}
+        }
+        if (items.isNotEmpty) {
+          mediaList.assignAll(items);
+          isLocalMediaList = true;
+          // 用完即清，避免污染下一次打开
+          GlobalData().pendingLocalMediaList = null;
+          GlobalData().pendingLocalMediaTitle = null;
+        } else {
+          getMediaList();
+        }
       } else {
         getMediaList();
       }
@@ -549,6 +580,40 @@ class VideoDetailController extends GetxController
   }
 
   void showMediaListPanel(BuildContext context) {
+    // 本地列表尚未填充时再尝试一次
+    if (mediaList.isEmpty && isLocalMediaList == false) {
+      final pending = GlobalData().pendingLocalMediaList ?? args['localMediaList'];
+      if (pending is List && pending.isNotEmpty) {
+        int? asInt(dynamic v) {
+          if (v == null) return null;
+          if (v is int) return v;
+          if (v is num) return v.toInt();
+          return int.tryParse('$v');
+        }
+        final items = <MediaListItemModel>[];
+        for (final e in pending) {
+          if (e is MediaListItemModel) {
+            items.add(e);
+          } else if (e is Map) {
+            final m = Map<String, dynamic>.from(e);
+            final cid = asInt(m['cid']);
+            items.add(MediaListItemModel(
+              aid: asInt(m['aid']),
+              bvid: m['bvid']?.toString(),
+              title: m['title']?.toString() ?? '',
+              cover: m['cover']?.toString(),
+              duration: asInt(m['duration']),
+              type: 2,
+              pages: cid != null ? [media_page.Page(id: cid)] : null,
+            ));
+          }
+        }
+        if (items.isNotEmpty) {
+          mediaList.assignAll(items);
+          isLocalMediaList = true;
+        }
+      }
+    }
     if (mediaList.isNotEmpty) {
       Widget panel() => MediaListPanel(
         mediaList: mediaList,

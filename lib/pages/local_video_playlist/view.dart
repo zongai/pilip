@@ -264,6 +264,9 @@ class _LocalVideoPlaylistDetailPageState
       maps[index]['cid'] = cid;
       maps[index]['aid'] = aid;
     }
+    // 同时写入 GlobalData，避免路由参数丢失导致播放侧栏空白
+    GlobalData().pendingLocalMediaList = maps;
+    GlobalData().pendingLocalMediaTitle = widget.title;
     PageUtils.toVideoPage(
       bvid: bvid,
       aid: aid,
