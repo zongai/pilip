@@ -636,103 +636,267 @@ class VideoDetailController extends GetxController
   }
 
   void showMediaListPanel(BuildContext context) {
-    // 本地连播：每次打开侧栏都强制从 Pref/session 重载
     final gd = GlobalData();
+    int? asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v');
+    }
+    final playlistId = gd.sessionLocalPlaylistId ??
+        gd.pendingLocalPlaylistId ??
+        asInt(args['localPlaylistId']);
     final hasLocalHint = isLocalMediaList ||
-        gd.sessionLocalPlaylistId != null ||
-        gd.pendingLocalPlaylistId != null ||
-        args['localPlaylistId'] != null ||
+        playlistId != null ||
         args['localMediaList'] is List ||
         (gd.sessionLocalMediaList is List &&
             (gd.sessionLocalMediaList as List).isNotEmpty);
+
+    // 同步填充 mediaList（供连续播放 next/prev）
     if (hasLocalHint) {
-      final ok = _fillLocalMediaList(
+      _fillLocalMediaList(
         maps: gd.sessionLocalMediaList ??
             gd.pendingLocalMediaList ??
             args['localMediaList'],
-        playlistId: gd.sessionLocalPlaylistId ?? gd.pendingLocalPlaylistId,
+        playlistId: playlistId,
       );
       if (gd.sessionLocalMediaTitle != null) {
         watchLaterTitle = gd.sessionLocalMediaTitle!;
       }
-      if (!ok && mediaList.isEmpty) {
-        SmartDialog.showToast('本地播放列表为空或加载失败');
-      }
-    } else if (mediaList.isEmpty) {
-      // no-op, fall through
     }
-    if (mediaList.isNotEmpty) {
-      mediaList.refresh();
-      Widget panel() => MediaListPanel(
-        mediaList: mediaList,
-        onChangeEpisode: (episode) {
-          try {
-            ugcIntroCtr.onChangeEpisode(episode);
-          } catch (_) {}
-        },
-        panelTitle: watchLaterTitle,
-        bvid: bvid,
-        count: isLocalMediaList ? mediaList.length : args['count'],
-        loadMoreMedia: isLocalMediaList ? () async {} : getMediaList,
-        desc: _mediaDesc,
-        onReverse: () {
-          _mediaDesc = !_mediaDesc;
-          if (isLocalMediaList) {
-            mediaList.value = mediaList.reversed.toList();
-          } else {
-            getMediaList(isReverse: true);
-          }
-        },
-        loadPrevious: isLocalMediaList
-            ? null
-            : (args['isContinuePlaying'] == true
-                ? () => getMediaList(isLoadPrevious: true)
-                : null),
-        onDelete: isLocalMediaList
-            ? (item, index) async {
-                // 本地列表：仅从当前侧栏移除
-                mediaList.removeAt(index);
-              }
-            : sourceType == SourceType.watchLater ||
-                (sourceType == SourceType.fav && args['isOwner'] == true)
-            ? (item, index) async {
-                if (sourceType == SourceType.watchLater) {
-                  final res = await UserHttp.toViewDel(
-                    aids: item.aid.toString(),
-                  );
-                  if (res.isSuccess) {
-                    mediaList.removeAt(index);
-                  }
-                } else {
-                  final res = await FavHttp.favVideo(
-                    resources: '${item.aid}:${item.type}',
-                    delIds: '${args['mediaId']}',
-                  );
-                  if (res.isSuccess) {
-                    mediaList.removeAt(index);
-                    SmartDialog.showToast('取消收藏');
-                  } else {
-                    res.toast();
-                  }
-                }
-              }
-            : null,
-      );
+
+    // 本地列表：直接从 Pref/session 取原始 map 自绘侧栏，不依赖 MediaListPanel
+    if (hasLocalHint) {
+      List raw = const [];
+      if (playlistId != null) {
+        try {
+          raw = Pref.getLocalVideoPlaylistItems(playlistId);
+        } catch (_) {}
+      }
+      if (raw.isEmpty) {
+        final fb = gd.sessionLocalMediaList ??
+            gd.pendingLocalMediaList ??
+            args['localMediaList'];
+        if (fb is List) raw = List.from(fb);
+      }
+      // 若 mediaList 已有数据也可用
+      if (raw.isEmpty && mediaList.isNotEmpty) {
+        raw = mediaList
+            .map((e) => {
+                  'aid': e.aid,
+                  'bvid': e.bvid,
+                  'cid': e.cid,
+                  'title': e.title,
+                  'cover': e.cover,
+                  'duration': e.duration,
+                })
+            .toList();
+      }
+      if (raw.isEmpty) {
+        SmartDialog.showToast(
+          '本地播放列表为空 (id=$playlistId, mediaList=${mediaList.length})',
+        );
+        return;
+      }
+      // 自然排序
+      raw = List<Map>.from(raw.map((e) {
+        if (e is Map) {
+          return <String, dynamic>{
+            for (final entry in e.entries) '${entry.key}': entry.value,
+          };
+        }
+        return <String, dynamic>{};
+      }));
+      raw.sort((a, b) => Pref.natCompareTitle(
+            '${a['title'] ?? ''}',
+            '${b['title'] ?? ''}',
+          ));
+      final title = watchLaterTitle.isNotEmpty
+          ? watchLaterTitle
+          : (gd.sessionLocalMediaTitle ?? '本地播放列表');
+      final currentBvid = bvid;
+      Widget localPanel() {
+        return Material(
+          color: Get.theme.colorScheme.surface,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 45,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        '$title · ${raw.length}',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: Get.back,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: raw.length,
+                  itemBuilder: (context, index) {
+                    final m = raw[index];
+                    final t = '${m['title'] ?? ''}';
+                    final cover = m['cover']?.toString() ?? '';
+                    final itemBvid = m['bvid']?.toString();
+                    final isCurr = itemBvid != null &&
+                        itemBvid.isNotEmpty &&
+                        itemBvid == currentBvid;
+                    return ListTile(
+                      dense: true,
+                      selected: isCurr,
+                      leading: cover.isNotEmpty
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.network(
+                                cover,
+                                width: 64,
+                                height: 40,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox(width: 64, height: 40),
+                              ),
+                            )
+                          : const SizedBox(width: 64, height: 40),
+                      title: Text(
+                        t.isEmpty ? '无标题' : t,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isCurr
+                              ? Get.theme.colorScheme.primary
+                              : null,
+                        ),
+                      ),
+                      onTap: () {
+                        Get.back();
+                        // 切集：优先走 mediaList 中的模型
+                        final targetBvid = itemBvid;
+                        final targetAid = asInt(m['aid']);
+                        MediaListItemModel? ep;
+                        if (mediaList.isNotEmpty) {
+                          final i = mediaList.indexWhere((e) {
+                            if (targetBvid != null &&
+                                targetBvid.isNotEmpty &&
+                                e.bvid == targetBvid) {
+                              return true;
+                            }
+                            return targetAid != null && e.aid == targetAid;
+                          });
+                          if (i >= 0) ep = mediaList[i];
+                        }
+                        ep ??= MediaListItemModel(
+                          aid: targetAid,
+                          bvid: targetBvid,
+                          title: t,
+                          cover: cover,
+                          duration: asInt(m['duration']),
+                          type: 2,
+                          cid: asInt(m['cid']),
+                          pages: asInt(m['cid']) != null
+                              ? [media_page.Page(id: asInt(m['cid']))]
+                              : null,
+                        );
+                        try {
+                          ugcIntroCtr.onChangeEpisode(ep);
+                        } catch (_) {}
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
       if (plPlayerController.isFullScreen.value || showVideoSheet) {
         PageUtils.showVideoBottomSheet(
           context,
           child: plPlayerController.darkVideoPage
-              ? Theme(data: ThemeUtils.darkTheme, child: panel())
-              : panel(),
+              ? Theme(data: ThemeUtils.darkTheme, child: localPanel())
+              : localPanel(),
         );
       } else {
         childKey.currentState?.showBottomSheet(
           constraints: const BoxConstraints(),
-          (context) => panel(),
+          (context) => localPanel(),
         );
       }
-    } else {
+      return;
+    }
+
+    // —— 官方稍后再看 / 收藏夹等原逻辑 ——
+    if (mediaList.isEmpty) {
       getMediaList();
+      return;
+    }
+    Widget panel() => MediaListPanel(
+      mediaList: mediaList,
+      onChangeEpisode: (episode) {
+        try {
+          ugcIntroCtr.onChangeEpisode(episode);
+        } catch (_) {}
+      },
+      panelTitle: watchLaterTitle,
+      bvid: bvid,
+      count: args['count'],
+      loadMoreMedia: getMediaList,
+      desc: _mediaDesc,
+      onReverse: () {
+        _mediaDesc = !_mediaDesc;
+        getMediaList(isReverse: true);
+      },
+      loadPrevious: args['isContinuePlaying'] == true
+          ? () => getMediaList(isLoadPrevious: true)
+          : null,
+      onDelete: sourceType == SourceType.watchLater ||
+              (sourceType == SourceType.fav && args['isOwner'] == true)
+          ? (item, index) async {
+              if (sourceType == SourceType.watchLater) {
+                final res = await UserHttp.toViewDel(
+                  aids: item.aid.toString(),
+                );
+                if (res.isSuccess) {
+                  mediaList.removeAt(index);
+                }
+              } else {
+                final res = await FavHttp.favVideo(
+                  resources: '${item.aid}:${item.type}',
+                  delIds: '${args['mediaId']}',
+                );
+                if (res.isSuccess) {
+                  mediaList.removeAt(index);
+                  SmartDialog.showToast('取消收藏');
+                } else {
+                  res.toast();
+                }
+              }
+            }
+          : null,
+    );
+    if (plPlayerController.isFullScreen.value || showVideoSheet) {
+      PageUtils.showVideoBottomSheet(
+        context,
+        child: plPlayerController.darkVideoPage
+            ? Theme(data: ThemeUtils.darkTheme, child: panel())
+            : panel(),
+      );
+    } else {
+      childKey.currentState?.showBottomSheet(
+        constraints: const BoxConstraints(),
+        (context) => panel(),
+      );
     }
   }
 
