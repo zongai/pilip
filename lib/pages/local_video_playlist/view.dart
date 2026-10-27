@@ -264,9 +264,10 @@ class _LocalVideoPlaylistDetailPageState
       maps[index]['cid'] = cid;
       maps[index]['aid'] = aid;
     }
-    // 同时写入 GlobalData，避免路由参数丢失导致播放侧栏空白
+    // 写入 GlobalData + playlistId，播放页优先从本地存储按 id 加载
     GlobalData().pendingLocalMediaList = maps;
     GlobalData().pendingLocalMediaTitle = widget.title;
+    GlobalData().pendingLocalPlaylistId = widget.playlistId;
     PageUtils.toVideoPage(
       bvid: bvid,
       aid: aid,
@@ -279,6 +280,7 @@ class _LocalVideoPlaylistDetailPageState
         'desc': true,
         'count': maps.length,
         'localMediaList': maps,
+        'localPlaylistId': widget.playlistId,
         'oid': aid,
       },
     );
