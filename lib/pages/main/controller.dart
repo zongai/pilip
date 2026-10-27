@@ -235,6 +235,11 @@ class MainController extends GetxController
           .map(NavigationBarType.values.elementAt)
           .toList();
     }
+    // 启用本地功能时隐藏「动态」入口
+    if (Pref.enableLocalFeatures) {
+      navigationBars =
+          navigationBars.where((e) => e != NavigationBarType.dynamics).toList();
+    }
     this.navigationBars = navigationBars;
     final defPage = Pref.defaultHomePage;
     selectedIndex.value = math.max(0, navigationBars.indexOf(defPage));
