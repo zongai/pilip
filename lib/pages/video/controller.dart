@@ -471,9 +471,12 @@ class VideoDetailController extends GetxController
           gd.sessionLocalMediaTitle ??
           '播放列表';
       _mediaDesc = args['desc'] == true || args['desc'] == 1;
+      if (pendingId != null) {
+        Pref.lastLocalPlaylistId = pendingId;
+      }
       final filled = _fillLocalMediaList(
         maps: args['localMediaList'] ?? pending,
-        playlistId: pendingId,
+        playlistId: pendingId ?? Pref.lastLocalPlaylistId,
       );
       if (!filled) {
         // 非本地列表才走官方接口
@@ -643,179 +646,180 @@ class VideoDetailController extends GetxController
       if (v is num) return v.toInt();
       return int.tryParse('$v');
     }
-    final playlistId = gd.sessionLocalPlaylistId ??
+
+    // 播单 id：Pref 持久化 > session > pending > 路由
+    final playlistId = Pref.lastLocalPlaylistId ??
+        gd.sessionLocalPlaylistId ??
         gd.pendingLocalPlaylistId ??
         asInt(args['localPlaylistId']);
+
     final hasLocalHint = isLocalMediaList ||
         playlistId != null ||
+        Pref.lastLocalPlaylistId != null ||
         args['localMediaList'] is List ||
         (gd.sessionLocalMediaList is List &&
             (gd.sessionLocalMediaList as List).isNotEmpty);
 
-    // 同步填充 mediaList（供连续播放 next/prev）
     if (hasLocalHint) {
+      // 同步填充 mediaList 供连播 next/prev
       _fillLocalMediaList(
         maps: gd.sessionLocalMediaList ??
             gd.pendingLocalMediaList ??
             args['localMediaList'],
         playlistId: playlistId,
       );
-      if (gd.sessionLocalMediaTitle != null) {
-        watchLaterTitle = gd.sessionLocalMediaTitle!;
-      }
-    }
+      final panelTitle = Pref.lastLocalPlaylistTitle ??
+          gd.sessionLocalMediaTitle ??
+          watchLaterTitle;
 
-    // 本地列表：直接从 Pref/session 取原始 map 自绘侧栏，不依赖 MediaListPanel
-    if (hasLocalHint) {
-      List raw = const [];
+      // 只从 Pref 读列表（与播单管理页同一数据源）
+      List<Map<String, dynamic>> raw = [];
       if (playlistId != null) {
-        try {
-          raw = Pref.getLocalVideoPlaylistItems(playlistId);
-        } catch (_) {}
-      }
-      if (raw.isEmpty) {
-        final fb = gd.sessionLocalMediaList ??
-            gd.pendingLocalMediaList ??
-            args['localMediaList'];
-        if (fb is List) raw = List.from(fb);
-      }
-      // 若 mediaList 已有数据也可用
-      if (raw.isEmpty && mediaList.isNotEmpty) {
-        raw = mediaList
-            .map((e) => {
-                  'aid': e.aid,
-                  'bvid': e.bvid,
-                  'cid': e.cid,
-                  'title': e.title,
-                  'cover': e.cover,
-                  'duration': e.duration,
-                })
+        raw = Pref.getLocalVideoPlaylistItems(playlistId)
+            .map((e) => Map<String, dynamic>.from(e))
             .toList();
       }
       if (raw.isEmpty) {
+        // 回退：任意本地播单里有数据则用第一个非空
+        for (final pl in Pref.localVideoPlaylists) {
+          final id = asInt(pl['id']);
+          final items = Pref.getLocalVideoPlaylistItems(id);
+          if (items.isNotEmpty) {
+            raw = items.map((e) => Map<String, dynamic>.from(e)).toList();
+            break;
+          }
+        }
+      }
+      if (raw.isEmpty && mediaList.isNotEmpty) {
+        raw = [
+          for (final e in mediaList)
+            {
+              'aid': e.aid,
+              'bvid': e.bvid,
+              'cid': e.cid,
+              'title': e.title,
+              'cover': e.cover,
+              'duration': e.duration,
+            },
+        ];
+      }
+      if (raw.isEmpty) {
         SmartDialog.showToast(
-          '本地播放列表为空 (id=$playlistId, mediaList=${mediaList.length})',
+          '本地播放列表为空 id=$playlistId media=${mediaList.length} pls=${Pref.localVideoPlaylists.length}',
         );
         return;
       }
-      // 自然排序
-      raw = List<Map>.from(raw.map((e) {
-        if (e is Map) {
-          return <String, dynamic>{
-            for (final entry in e.entries) '${entry.key}': entry.value,
-          };
-        }
-        return <String, dynamic>{};
-      }));
       raw.sort((a, b) => Pref.natCompareTitle(
             '${a['title'] ?? ''}',
             '${b['title'] ?? ''}',
           ));
-      final title = watchLaterTitle.isNotEmpty
-          ? watchLaterTitle
-          : (gd.sessionLocalMediaTitle ?? '本地播放列表');
+
       final currentBvid = bvid;
+      final screenH = MediaQuery.sizeOf(context).height;
+      // 固定高度，避免 Expanded 在 bottom sheet 里高度为 0
       Widget localPanel() {
         return Material(
           color: Get.theme.colorScheme.surface,
-          child: Column(
-            children: [
-              SizedBox(
-                height: 45,
-                child: Row(
-                  children: [
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        '$title · ${raw.length}',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: Get.back,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: raw.length,
-                  itemBuilder: (context, index) {
-                    final m = raw[index];
-                    final t = '${m['title'] ?? ''}';
-                    final cover = m['cover']?.toString() ?? '';
-                    final itemBvid = m['bvid']?.toString();
-                    final isCurr = itemBvid != null &&
-                        itemBvid.isNotEmpty &&
-                        itemBvid == currentBvid;
-                    return ListTile(
-                      dense: true,
-                      selected: isCurr,
-                      leading: cover.isNotEmpty
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                cover,
-                                width: 64,
-                                height: 40,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    const SizedBox(width: 64, height: 40),
-                              ),
-                            )
-                          : const SizedBox(width: 64, height: 40),
-                      title: Text(
-                        t.isEmpty ? '无标题' : t,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isCurr
-                              ? Get.theme.colorScheme.primary
-                              : null,
+          child: SizedBox(
+            height: screenH * 0.55,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: 48,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          '${panelTitle.isNotEmpty ? panelTitle : '本地播放列表'} · ${raw.length}',
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ),
-                      onTap: () {
-                        Get.back();
-                        // 切集：优先走 mediaList 中的模型
-                        final targetBvid = itemBvid;
-                        final targetAid = asInt(m['aid']);
-                        MediaListItemModel? ep;
-                        if (mediaList.isNotEmpty) {
-                          final i = mediaList.indexWhere((e) {
-                            if (targetBvid != null &&
-                                targetBvid.isNotEmpty &&
-                                e.bvid == targetBvid) {
-                              return true;
-                            }
-                            return targetAid != null && e.aid == targetAid;
-                          });
-                          if (i >= 0) ep = mediaList[i];
-                        }
-                        ep ??= MediaListItemModel(
-                          aid: targetAid,
-                          bvid: targetBvid,
-                          title: t,
-                          cover: cover,
-                          duration: asInt(m['duration']),
-                          type: 2,
-                          cid: asInt(m['cid']),
-                          pages: asInt(m['cid']) != null
-                              ? [media_page.Page(id: asInt(m['cid']))]
-                              : null,
-                        );
-                        try {
-                          ugcIntroCtr.onChangeEpisode(ep);
-                        } catch (_) {}
-                      },
-                    );
-                  },
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: Get.back,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: raw.length,
+                    itemBuilder: (context, index) {
+                      final m = raw[index];
+                      final t = '${m['title'] ?? ''}';
+                      final cover = '${m['cover'] ?? ''}';
+                      final itemBvid = m['bvid']?.toString();
+                      final isCurr = itemBvid != null &&
+                          itemBvid.isNotEmpty &&
+                          itemBvid == currentBvid;
+                      return ListTile(
+                        dense: true,
+                        selected: isCurr,
+                        leading: cover.isNotEmpty
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: Image.network(
+                                  cover,
+                                  width: 64,
+                                  height: 40,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const SizedBox(width: 64, height: 40),
+                                ),
+                              )
+                            : const SizedBox(width: 64, height: 40),
+                        title: Text(
+                          t.isEmpty ? '无标题' : t,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isCurr
+                                ? Get.theme.colorScheme.primary
+                                : null,
+                          ),
+                        ),
+                        onTap: () {
+                          Get.back();
+                          final targetAid = asInt(m['aid']);
+                          MediaListItemModel? ep;
+                          if (mediaList.isNotEmpty) {
+                            final i = mediaList.indexWhere((e) {
+                              if (itemBvid != null &&
+                                  itemBvid.isNotEmpty &&
+                                  e.bvid == itemBvid) {
+                                return true;
+                              }
+                              return targetAid != null && e.aid == targetAid;
+                            });
+                            if (i >= 0) ep = mediaList[i];
+                          }
+                          final cid = asInt(m['cid']);
+                          ep ??= MediaListItemModel(
+                            aid: targetAid,
+                            bvid: itemBvid,
+                            title: t,
+                            cover: cover,
+                            duration: asInt(m['duration']),
+                            type: 2,
+                            cid: cid,
+                            pages: cid != null
+                                ? [media_page.Page(id: cid)]
+                                : null,
+                          );
+                          try {
+                            ugcIntroCtr.onChangeEpisode(ep);
+                          } catch (_) {}
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       }
@@ -828,15 +832,16 @@ class VideoDetailController extends GetxController
               : localPanel(),
         );
       } else {
-        childKey.currentState?.showBottomSheet(
-          constraints: const BoxConstraints(),
-          (context) => localPanel(),
+        // 非全屏也用 showVideoBottomSheet，保证有明确高度
+        PageUtils.showVideoBottomSheet(
+          context,
+          child: localPanel(),
         );
       }
       return;
     }
 
-    // —— 官方稍后再看 / 收藏夹等原逻辑 ——
+    // —— 官方稍后再看 / 收藏夹 ——
     if (mediaList.isEmpty) {
       getMediaList();
       return;

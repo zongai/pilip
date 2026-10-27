@@ -274,7 +274,7 @@ class _LocalVideoPlaylistDetailPageState
       maps[index]['cid'] = cid;
       maps[index]['aid'] = aid;
     }
-    // 写入 GlobalData + playlistId，播放页优先从本地存储按 id 加载
+    // 写入 GlobalData + Pref 持久化 playlistId（侧栏只从 Pref 读）
     final gd = GlobalData();
     gd.pendingLocalMediaList = maps;
     gd.pendingLocalMediaTitle = widget.title;
@@ -282,6 +282,8 @@ class _LocalVideoPlaylistDetailPageState
     gd.sessionLocalMediaList = maps;
     gd.sessionLocalMediaTitle = widget.title;
     gd.sessionLocalPlaylistId = widget.playlistId;
+    Pref.lastLocalPlaylistId = widget.playlistId;
+    Pref.lastLocalPlaylistTitle = widget.title;
     PageUtils.toVideoPage(
       bvid: bvid,
       aid: aid,

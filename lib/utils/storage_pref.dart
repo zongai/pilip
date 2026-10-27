@@ -274,6 +274,35 @@ abstract final class Pref {
     ];
   }
 
+  /// 当前连播的本地播单 id（持久化，播放页侧栏只认这个）
+  static int? get lastLocalPlaylistId {
+    final v = _localCache.get('lastLocalPlaylistId');
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('$v');
+  }
+
+  static set lastLocalPlaylistId(int? id) {
+    if (id == null) {
+      _localCache.delete('lastLocalPlaylistId');
+    } else {
+      _localCache.put('lastLocalPlaylistId', id);
+    }
+  }
+
+  static String? get lastLocalPlaylistTitle {
+    final v = _localCache.get('lastLocalPlaylistTitle');
+    return v is String ? v : (v == null ? null : '$v');
+  }
+
+  static set lastLocalPlaylistTitle(String? title) {
+    if (title == null || title.isEmpty) {
+      _localCache.delete('lastLocalPlaylistTitle');
+    } else {
+      _localCache.put('lastLocalPlaylistTitle', title);
+    }
+  }
+
   /// 多播放列表：[{id,title,items:[{aid,bvid,cid,title,cover,authorName,authorMid,duration}]}]
   /// 兼容旧版扁平列表自动迁移为「默认列表」
   static List<Map> get localVideoPlaylists {
@@ -288,7 +317,7 @@ abstract final class Pref {
     final items = _normMapList(raw);
     final migrated = [
       {
-        'id': DateTime.now().millisecondsSinceEpoch,
+        'id': 1,
         'title': '默认列表',
         'items': items,
       }
