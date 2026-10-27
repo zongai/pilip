@@ -79,7 +79,7 @@ jobs:
         with:
           name: Windows-file-x64-release
           path: PiliPlus_windows_*.zip
-          retention-days: 3
+          retention-days: 1
 
       - name: Upload windows setup release
         continue-on-error: true
@@ -87,4 +87,4 @@ jobs:
         with:
           name: Windows-setup-x64-release
           path: PiliPlus-Win-Setup/PiliPlus_windows_*.exe
-          retention-days: 3
+          retention-days: 1
