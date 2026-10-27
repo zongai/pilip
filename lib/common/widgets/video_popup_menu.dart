@@ -10,6 +10,7 @@ import 'package:PiliPlus/pages/video/ai_conclusion/view.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -72,10 +73,19 @@ class VideoPopupMenu extends StatelessWidget {
                         return int.tryParse('$v');
                       }
                       try {
-                        final int? aid = videoItem is BaseVideoItemModel
-                            ? (videoItem as BaseVideoItemModel).aid
-                            : asInt((videoItem as dynamic).aid);
+                        // SpaceArchiveItem 无 aid，只有 param / bvid
+                        int? aid;
+                        if (videoItem is BaseVideoItemModel) {
+                          aid = (videoItem as BaseVideoItemModel).aid;
+                        } else if (videoItem is SpaceArchiveItem) {
+                          aid = asInt((videoItem as SpaceArchiveItem).param);
+                        }
                         final bvid = videoItem.bvid;
+                        if (aid == null && bvid != null && bvid.isNotEmpty) {
+                          try {
+                            aid = IdUtils.bv2av(bvid);
+                          } catch (_) {}
+                        }
                         if ((bvid == null || bvid.isEmpty) && aid == null) {
                           SmartDialog.showToast('无法获取视频信息');
                           return;
