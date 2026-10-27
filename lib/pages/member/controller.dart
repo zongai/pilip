@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/member.dart';
 import 'package:PiliPlus/http/user.dart';
@@ -39,8 +40,24 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   int? isFollowed; // 被关注
   RxInt relation = 0.obs;
   bool get isFollow {
+    if (Pref.enableLocalFeatures &&
+        GlobalData().localFollowMids.contains(mid)) {
+      return true;
+    }
     final relation = this.relation.value;
     return relation != 0 && relation != 128 && relation != -1;
+  }
+
+  /// 用于 UI：本地关注时显示「已关注」
+  int get displayRelation {
+    final r = relation.value;
+    if (GlobalData().blackMids.contains(mid) || r == 128) return 128;
+    if (Pref.enableLocalFeatures &&
+        GlobalData().localFollowMids.contains(mid) &&
+        (r == 0 || r == -1)) {
+      return 2;
+    }
+    return r;
   }
 
   SpaceSetting? spaceSetting;
@@ -107,6 +124,14 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
                   ? -10
                   : card?.relation?.status ?? 2
             : data.relation ?? 0;
+    }
+    if (Pref.enableLocalFeatures) {
+      if (GlobalData().blackMids.contains(mid)) {
+        relation.value = 128;
+      } else if (GlobalData().localFollowMids.contains(mid) &&
+          (relation.value == 0 || relation.value == -1)) {
+        relation.value = 2;
+      }
     }
     tab2 = data.tab2;
     live = data.live;

@@ -57,7 +57,9 @@ class MineController extends GetxController with AccountMixin {
       icon: CustomIcons.history,
       title: '观看记录',
       onTap: () {
-        if (isLogin) {
+        if (Pref.enableLocalFeatures) {
+          Get.toNamed('/localHistoryPage');
+        } else if (isLogin) {
           Get.toNamed('/history');
         }
       },
@@ -75,10 +77,17 @@ class MineController extends GetxController with AccountMixin {
       icon: CustomIcons.watch_later_outlined,
       title: '稍后再看',
       onTap: () {
-        if (isLogin) {
+        if (Pref.enableLocalFeatures) {
+          Get.toNamed('/localLaterPage');
+        } else if (isLogin) {
           Get.toNamed('/later');
         }
       },
+    ),
+    (
+      icon: Icons.playlist_play_outlined,
+      title: '本地播放列表',
+      onTap: () => Get.toNamed('/localVideoPlaylistPage'),
     ),
   ];
 

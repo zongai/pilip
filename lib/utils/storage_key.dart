@@ -1,6 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const String enableLocalFeatures = 'enableLocalFeatures';
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',
       defaultVideoQaCellular = 'defaultVideoQaCellular',
@@ -259,6 +260,12 @@ abstract final class SettingBoxKey {
 abstract final class LocalCacheKey {
   static const String historyPause = 'historyPause',
       blackMids = 'blackMids',
+      localFollows = 'localFollows',
+      localSeasons = 'localSeasons',
+      localPlaylists = 'localPlaylists',
+      localVideoPlaylist = 'localVideoPlaylist',
+      localHistory = 'localHistory',
+      localLater = 'localLater',
       danmakuFilterRules = 'danmakuFilterRules',
       mixinKey = 'mixinKey',
       timeStamp = 'timeStamp';

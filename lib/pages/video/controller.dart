@@ -341,6 +341,45 @@ class VideoDetailController extends GetxController
     } else if (playedTime case final playedTime?) {
       watchProgress.put(cid.value.toString(), playedTime.inMilliseconds);
     }
+    if (Pref.enableLocalFeatures) {
+      _recordLocalHistory();
+    }
+  }
+
+  void _recordLocalHistory() {
+    try {
+      String? title;
+      String? coverStr = cover.value;
+      String? authorName;
+      int? authorMid;
+      int durationSec = 0;
+      int progressSec = 0;
+      if (playedTime case final t?) {
+        progressSec = t.inSeconds;
+      }
+      try {
+        final intro = Get.find<UgcIntroController>(tag: heroTag);
+        final detail = intro.videoDetail.value;
+        title = detail.title;
+        coverStr = coverStr.isNotEmpty ? coverStr : detail.pic;
+        authorName = detail.owner?.name;
+        authorMid = detail.owner?.mid;
+        durationSec = detail.duration ?? 0;
+      } catch (_) {
+        title = args['title'] as String?;
+      }
+      Pref.addLocalHistory(
+        aid: aid,
+        bvid: bvid,
+        cid: cid.value,
+        title: title,
+        cover: coverStr,
+        authorName: authorName,
+        authorMid: authorMid,
+        progress: progressSec,
+        duration: durationSec,
+      );
+    } catch (_) {}
   }
 
   void _initLocalSkipIfNeeded() {
@@ -403,9 +442,16 @@ class VideoDetailController extends GetxController
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
-      watchLaterTitle = args['favTitle'];
+      watchLaterTitle = args['favTitle'] ?? '播放列表';
       _mediaDesc = args['desc'];
-      getMediaList();
+      final local = args['localMediaList'];
+      if (local is List && local.isNotEmpty) {
+        mediaList.assignAll(
+          local.whereType<MediaListItemModel>().toList(),
+        );
+      } else {
+        getMediaList();
+      }
     }
 
     tabCtr = TabController(
@@ -415,6 +461,10 @@ class VideoDetailController extends GetxController
           ? 1
           : 0,
     );
+
+    if (Pref.enableLocalFeatures) {
+      Future.microtask(_recordLocalHistory);
+    }
   }
 
   Future<void> getMediaList({

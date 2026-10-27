@@ -61,6 +61,28 @@ class VideoPopupMenu extends StatelessWidget {
                       const Icon(MdiIcons.clockTimeEightOutline, size: 16),
                       () => UserHttp.toViewLater(bvid: videoItem.bvid),
                     ),
+                  _VideoCustomAction(
+                    '加入本地播放列表',
+                    const Icon(Icons.playlist_add, size: 16),
+                    () {
+                      final int? aid = videoItem is BaseVideoItemModel
+                          ? (videoItem as BaseVideoItemModel).aid
+                          : null;
+                      Pref.addLocalVideoPlaylistItem(
+                        aid: aid,
+                        bvid: videoItem.bvid,
+                        cid: videoItem.cid,
+                        title: videoItem.title,
+                        cover: videoItem.cover,
+                        authorName: videoItem.owner.name,
+                        authorMid: videoItem.owner.mid,
+                        duration: videoItem.duration > 0
+                            ? videoItem.duration
+                            : null,
+                      );
+                      SmartDialog.showToast('已加入本地播放列表');
+                    },
+                  ),
                   if (videoItem.cid != null && Pref.enableAi)
                     _VideoCustomAction(
                       'AI总结',

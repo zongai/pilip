@@ -141,6 +141,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     if (isLogin) {
       queryAllStatus();
       queryFollowStatus();
+    } else if (Pref.enableLocalFeatures) {
+      applyLocalRelationStatus(videoDetail.value.owner?.mid);
     }
   }
 
@@ -406,22 +408,49 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     );
   }
 
+  void applyLocalRelationStatus(int? mid) {
+    if (mid == null || !Pref.enableLocalFeatures) return;
+    if (GlobalData().blackMids.contains(mid)) {
+      followStatus
+        ..value.attribute = 128
+        ..refresh();
+      return;
+    }
+    if (GlobalData().localFollowMids.contains(mid)) {
+      final attr = followStatus.value.attribute ?? 0;
+      if (attr == 0 || attr == -1) {
+        followStatus
+          ..value.attribute = 2
+          ..refresh();
+      }
+    }
+  }
+
   // 查询关注状态
   Future<void> queryFollowStatus() async {
     final videoDetail = this.videoDetail.value;
     if (videoDetail.owner == null || videoDetail.staff?.isNotEmpty == true) {
       return;
     }
-    final res = await UserHttp.userRelation(videoDetail.owner!.mid!);
+    final mid = videoDetail.owner!.mid!;
+    if (Pref.enableLocalFeatures &&
+        (!isLogin || GlobalData().localFollowMids.contains(mid))) {
+      applyLocalRelationStatus(mid);
+      if (!isLogin) return;
+    }
+    final res = await UserHttp.userRelation(mid);
     if (res case Success(:final response)) {
       if (response.special == 1) response.attribute = -10;
       followStatus.value = response;
+      applyLocalRelationStatus(mid);
+    } else {
+      applyLocalRelationStatus(mid);
     }
   }
 
-  // 关注/取关up
+  // 关注/取关up（本地功能开启时无需登录）
   Future<void> actionRelationMod(BuildContext context) async {
-    if (!isLogin) {
+    if (!isLogin && !Pref.enableLocalFeatures) {
       SmartDialog.showToast('账号未登录');
       return;
     }

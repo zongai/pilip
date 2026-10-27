@@ -1,6 +1,8 @@
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/models/common/enum_with_label.dart';
 import 'package:PiliPlus/pages/dynamics/view.dart';
+import 'package:PiliPlus/pages/local_follow/view.dart';
+import 'package:PiliPlus/pages/local_season/view.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:material_ui/material_ui.dart';
@@ -11,6 +13,12 @@ enum NavigationBarType implements EnumWithLabel {
     Icon(Icons.home_outlined),
     Icon(Icons.home),
     HomePage(),
+  ),
+  follow(
+    '关注',
+    Icon(Icons.favorite_border),
+    Icon(Icons.favorite),
+    LocalFollowPage(),
   ),
   dynamics(
     '动态',
@@ -23,6 +31,12 @@ enum NavigationBarType implements EnumWithLabel {
     Icon(Icons.person_outline),
     Icon(Icons.person),
     MinePage(),
+  ),
+  season(
+    '合集',
+    Icon(Icons.video_library_outlined),
+    Icon(Icons.video_library),
+    LocalSeasonPage(),
   ),
   ;
 

@@ -673,6 +673,25 @@ abstract final class VideoHttp {
     required int act,
     required int reSrc,
   }) async {
+    // 本地功能：关注/取关/拉黑/取消拉黑 不请求官方、无需登录
+    if (Pref.enableLocalFeatures) {
+      if (act == 1) {
+        Pref.addLocalFollow(mid: mid);
+        return const Success(null);
+      }
+      if (act == 2) {
+        Pref.removeLocalFollow(mid);
+        return const Success(null);
+      }
+      if (act == 5) {
+        Pref.setBlackMid(mid);
+        return const Success(null);
+      }
+      if (act == 6) {
+        Pref.removeBlackMid(mid);
+        return const Success(null);
+      }
+    }
     final isBlock = act == 5;
     if (isBlock && !Accounts.main.isLogin) {
       Pref.setBlackMid(mid);

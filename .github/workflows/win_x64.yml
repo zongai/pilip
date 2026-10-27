@@ -10,6 +10,9 @@ on:
         type: string
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows-app:
     name: Release Windows x64
@@ -60,26 +63,28 @@ jobs:
           Compress-Archive -Path "Release/PiliPlus-Win" -DestinationPath "PiliPlus_windows_${{env.version}}_x64_portable.zip"
         shell: pwsh
 
-      - name: Release
-        if: ${{ github.event.inputs.tag != '' }}
-        uses: softprops/action-gh-release@v3
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: ${{ github.event.inputs.tag }}
+          tag_name: v${{ env.version }}
+          name: PiliPlus ${{ env.version }}
           files: |
             PiliPlus_windows_*.zip
             PiliPlus-Win-Setup/PiliPlus_windows_*.exe
+          fail_on_unmatched_files: false
 
       - name: Upload windows file release
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
-          archive: false
           name: Windows-file-x64-release
           path: PiliPlus_windows_*.zip
+          retention-days: 1
 
       - name: Upload windows setup release
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
-          archive: false
           name: Windows-setup-x64-release
           path: PiliPlus-Win-Setup/PiliPlus_windows_*.exe
+          retention-days: 1

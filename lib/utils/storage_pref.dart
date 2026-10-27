@@ -83,6 +83,523 @@ abstract final class Pref {
     GlobalData().blackMids..remove(mid),
   );
 
+  static void replaceBlackMids(Set<int> mids) {
+    blackMids = mids;
+    GlobalData().blackMids
+      ..clear()
+      ..addAll(mids);
+  }
+
+  static void mergeBlackMids(Set<int> mids) {
+    final set = Set<int>.from(blackMids)..addAll(mids);
+    replaceBlackMids(set);
+  }
+
+  /// 本地关注列表 [{mid, name, face}, ...]
+  /// 本地功能总开关：关闭时界面保持原始样式（显示动态、隐藏本地关注/合集等）
+  static bool get enableLocalFeatures =>
+      _setting.get(SettingBoxKey.enableLocalFeatures, defaultValue: true);
+
+  static set enableLocalFeatures(bool v) =>
+      _setting.put(SettingBoxKey.enableLocalFeatures, v);
+
+  static List<Map> get localFollows {
+    final raw = _localCache.get(LocalCacheKey.localFollows, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localFollows(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localFollows, list);
+
+  static bool isLocalFollowed(int mid) =>
+      GlobalData().localFollowMids.contains(mid);
+
+  static void addLocalFollow({
+    required int mid,
+    String? name,
+    String? face,
+  }) {
+    final list = List<Map>.from(localFollows);
+    final idx = list.indexWhere((e) => e['mid'] == mid);
+    final item = {
+      'mid': mid,
+      'name': name ?? (idx >= 0 ? list[idx]['name'] : null) ?? '',
+      'face': face ?? (idx >= 0 ? list[idx]['face'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localFollows = list;
+    GlobalData().localFollowMids.add(mid);
+    GlobalData().localFollowList = list;
+  }
+
+  static void removeLocalFollow(int mid) {
+    final list = List<Map>.from(localFollows)..removeWhere((e) => e['mid'] == mid);
+    localFollows = list;
+    GlobalData().localFollowMids.remove(mid);
+    GlobalData().localFollowList = list;
+  }
+
+  /// 本地合集收藏 [{id, title, cover, mediaCount, mid, upperName}, ...]
+  static List<Map> get localSeasons {
+    final raw = _localCache.get(LocalCacheKey.localSeasons, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localSeasons(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localSeasons, list);
+
+  static bool isLocalSeasonFav(dynamic seasonId) {
+    if (seasonId == null) return false;
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return false;
+    return GlobalData().localSeasonIds.contains(id);
+  }
+
+  static void addLocalSeason({
+    required dynamic seasonId,
+    String? title,
+    String? cover,
+    int? mediaCount,
+    int? mid,
+    String? upperName,
+  }) {
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return;
+    final list = List<Map>.from(localSeasons);
+    final idx = list.indexWhere((e) => e['id'] == id);
+    final item = {
+      'id': id,
+      'title': title ?? (idx >= 0 ? list[idx]['title'] : null) ?? '',
+      'cover': cover ?? (idx >= 0 ? list[idx]['cover'] : null) ?? '',
+      'mediaCount': mediaCount ?? (idx >= 0 ? list[idx]['mediaCount'] : null) ?? 0,
+      'mid': mid ?? (idx >= 0 ? list[idx]['mid'] : null),
+      'upperName': upperName ?? (idx >= 0 ? list[idx]['upperName'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localSeasons = list;
+    GlobalData().localSeasonIds.add(id);
+    GlobalData().localSeasonList = list;
+  }
+
+  static void removeLocalSeason(dynamic seasonId) {
+    final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
+    if (id == null) return;
+    final list = List<Map>.from(localSeasons)..removeWhere((e) => e['id'] == id);
+    localSeasons = list;
+    GlobalData().localSeasonIds.remove(id);
+    GlobalData().localSeasonList = list;
+  }
+
+  /// 本地播放列表收藏 [{mediaId, title, cover, mediaCount, upperName}, ...]
+  static List<Map> get localPlaylists {
+    final raw = _localCache.get(LocalCacheKey.localPlaylists, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localPlaylists(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localPlaylists, list);
+
+  static bool isLocalPlaylist(int mediaId) =>
+      GlobalData().localPlaylistIds.contains(mediaId);
+
+  static void addLocalPlaylist({
+    required int mediaId,
+    String? title,
+    String? cover,
+    int? mediaCount,
+    String? upperName,
+  }) {
+    final list = List<Map>.from(localPlaylists);
+    final idx = list.indexWhere((e) => e['mediaId'] == mediaId);
+    final item = {
+      'mediaId': mediaId,
+      'title': title ?? (idx >= 0 ? list[idx]['title'] : null) ?? '',
+      'cover': cover ?? (idx >= 0 ? list[idx]['cover'] : null) ?? '',
+      'mediaCount': mediaCount ?? (idx >= 0 ? list[idx]['mediaCount'] : null) ?? 0,
+      'upperName': upperName ?? (idx >= 0 ? list[idx]['upperName'] : null) ?? '',
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.insert(0, item);
+    }
+    localPlaylists = list;
+    GlobalData().localPlaylistIds.add(mediaId);
+    GlobalData().localPlaylistList = list;
+  }
+
+  static void removeLocalPlaylist(int mediaId) {
+    final list = List<Map>.from(localPlaylists)
+      ..removeWhere((e) => e['mediaId'] == mediaId);
+    localPlaylists = list;
+    GlobalData().localPlaylistIds.remove(mediaId);
+    GlobalData().localPlaylistList = list;
+  }
+
+  /// 本地视频播放列表（按标题排序）[{aid,bvid,cid,title,cover,authorName,authorMid,duration}, ...]
+  static List<Map> get localVideoPlaylist {
+    final raw = _localCache.get(LocalCacheKey.localVideoPlaylist, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localVideoPlaylist(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localVideoPlaylist, list);
+
+  static void _syncLocalVideoPlaylist(List<Map> list) {
+    list.sort((a, b) {
+      final ta = (a['title'] as String? ?? '').toLowerCase();
+      final tb = (b['title'] as String? ?? '').toLowerCase();
+      return ta.compareTo(tb);
+    });
+    localVideoPlaylist = list;
+    GlobalData().localVideoPlaylistList = list;
+  }
+
+  static bool isInLocalVideoPlaylist({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return false;
+    return GlobalData().localVideoPlaylistList.any(
+      (e) => (e['bvid'] ?? 'av${e['aid']}') == key,
+    );
+  }
+
+  static void addLocalVideoPlaylistItem({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localVideoPlaylist);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.add({
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'duration': duration ?? 0,
+    });
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void addLocalVideoPlaylistItems(List<Map> items) {
+    final list = List<Map>.from(localVideoPlaylist);
+    for (final e in items) {
+      final aid = e['aid'] as int?;
+      final bvid = e['bvid'] as String?;
+      if ((bvid == null || bvid.isEmpty) && aid == null) continue;
+      final key = bvid ?? 'av$aid';
+      list.removeWhere((x) => (x['bvid'] ?? 'av${x['aid']}') == key);
+      list.add({
+        'aid': aid,
+        'bvid': bvid,
+        'cid': e['cid'],
+        'title': e['title'] ?? '',
+        'cover': e['cover'] ?? '',
+        'authorName': e['authorName'] ?? '',
+        'authorMid': e['authorMid'],
+        'duration': e['duration'] ?? 0,
+      });
+    }
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void removeLocalVideoPlaylistItem({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return;
+    final list = List<Map>.from(localVideoPlaylist)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void clearLocalVideoPlaylist() {
+    _syncLocalVideoPlaylist([]);
+  }
+
+  static void replaceLocalVideoPlaylist(List<Map> list) {
+    _syncLocalVideoPlaylist(List<Map>.from(list));
+  }
+
+
+
+
+
+  /// 本地观看历史 [{aid,bvid,cid,title,cover,authorName,authorMid,progress,duration,viewAt}, ...]
+  static List<Map> get localHistory {
+    final raw = _localCache.get(LocalCacheKey.localHistory, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localHistory(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localHistory, list);
+
+  static void addLocalHistory({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? progress,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localHistory);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.insert(0, {
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'progress': progress ?? 0,
+      'duration': duration ?? 0,
+      'viewAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
+    // 最多保留 500 条
+    if (list.length > 500) {
+      list.removeRange(500, list.length);
+    }
+    localHistory = list;
+    GlobalData().localHistoryList = list;
+  }
+
+  static void removeLocalHistory(String key) {
+    final list = List<Map>.from(localHistory)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    localHistory = list;
+    GlobalData().localHistoryList = list;
+  }
+
+  static void clearLocalHistory() {
+    localHistory = [];
+    GlobalData().localHistoryList = [];
+  }
+
+  /// 本地稍后再看
+  static List<Map> get localLater {
+    final raw = _localCache.get(LocalCacheKey.localLater, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localLater(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localLater, list);
+
+  static bool isLocalLater({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return false;
+    return GlobalData().localLaterList.any(
+      (e) => (e['bvid'] ?? 'av${e['aid']}') == key,
+    );
+  }
+
+  static void addLocalLater({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localLater);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.insert(0, {
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'duration': duration ?? 0,
+      'addedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void removeLocalLater({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return;
+    final list = List<Map>.from(localLater)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void clearLocalLater() {
+    localLater = [];
+    GlobalData().localLaterList = [];
+  }
+
+  static void replaceLocalHistory(List<Map> list) {
+    // 最多 500
+    final trimmed = list.length > 500 ? list.sublist(0, 500) : list;
+    localHistory = trimmed;
+    GlobalData().localHistoryList = trimmed;
+  }
+
+  static void mergeLocalHistory(List<Map> incoming) {
+    final map = <String, Map>{};
+    for (final e in localHistory) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      map[key] = e;
+    }
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av') continue;
+      map[key] = {
+        ...?map[key],
+        ...e,
+      };
+    }
+    // 新导入优先靠前
+    final ordered = <Map>[];
+    final seen = <String>{};
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av' || !seen.add(key)) continue;
+      ordered.add(map[key]!);
+    }
+    for (final e in localHistory) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (seen.add(key)) ordered.add(e);
+    }
+    replaceLocalHistory(ordered);
+  }
+
+  static void replaceLocalLater(List<Map> list) {
+    localLater = list;
+    GlobalData().localLaterList = list;
+  }
+
+  static void mergeLocalLater(List<Map> incoming) {
+    final map = <String, Map>{};
+    for (final e in localLater) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      map[key] = e;
+    }
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av') continue;
+      map[key] = {...?map[key], ...e};
+    }
+    final ordered = <Map>[];
+    final seen = <String>{};
+    for (final e in incoming) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (key == 'avnull' || key == 'av' || !seen.add(key)) continue;
+      ordered.add(map[key]!);
+    }
+    for (final e in localLater) {
+      final key = e['bvid'] as String? ?? 'av${e['aid']}';
+      if (seen.add(key)) ordered.add(e);
+    }
+    replaceLocalLater(ordered);
+  }
+
+
+
+  static void replaceLocalFollows(List<Map> list) {
+    localFollows = list;
+    GlobalData().localFollowList = list;
+    GlobalData().localFollowMids
+      ..clear()
+      ..addAll({
+        for (final e in list)
+          if (e['mid'] is int) e['mid'] as int
+          else int.tryParse('${e['mid']}') ?? 0,
+      }..remove(0));
+  }
+
+  static void mergeLocalFollows(List<Map> incoming) {
+    final map = <int, Map>{
+      for (final e in localFollows)
+        if (e['mid'] != null)
+          (e['mid'] is int ? e['mid'] as int : int.tryParse('${e['mid']}') ?? 0): e,
+    }..remove(0);
+    for (final e in incoming) {
+      final mid = e['mid'] is int ? e['mid'] as int : int.tryParse('${e['mid']}') ?? 0;
+      if (mid == 0) continue;
+      map[mid] = {
+        'mid': mid,
+        'name': e['name'] ?? map[mid]?['name'] ?? '',
+        'face': e['face'] ?? map[mid]?['face'] ?? '',
+      };
+    }
+    replaceLocalFollows(map.values.toList());
+  }
+
+  static void replaceLocalPlaylists(List<Map> list) {
+    localPlaylists = list;
+    GlobalData().localPlaylistList = list;
+    GlobalData().localPlaylistIds
+      ..clear()
+      ..addAll({
+        for (final e in list)
+          if (e['mediaId'] is int) e['mediaId'] as int
+          else int.tryParse('${e['mediaId']}') ?? 0,
+      }..remove(0));
+  }
+
+  static void mergeLocalPlaylists(List<Map> incoming) {
+    final map = <int, Map>{
+      for (final e in localPlaylists)
+        if (e['mediaId'] != null)
+          (e['mediaId'] is int ? e['mediaId'] as int : int.tryParse('${e['mediaId']}') ?? 0): e,
+    }..remove(0);
+    for (final e in incoming) {
+      final id = e['mediaId'] is int
+          ? e['mediaId'] as int
+          : int.tryParse('${e['mediaId']}') ?? 0;
+      if (id == 0) continue;
+      final old = map[id];
+      map[id] = {
+        'mediaId': id,
+        'title': e['title'] ?? old?['title'] ?? '',
+        'cover': e['cover'] ?? old?['cover'] ?? '',
+        'mediaCount': e['mediaCount'] ?? old?['mediaCount'] ?? 0,
+        'upperName': e['upperName'] ?? old?['upperName'] ?? '',
+      };
+    }
+    replaceLocalPlaylists(map.values.toList());
+  }
+
+
+
+
+
+
   static MemberTabType get memberTab =>
       MemberTabType.values[_setting.get(
         SettingBoxKey.memberTab,
