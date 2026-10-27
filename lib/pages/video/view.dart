@@ -1418,6 +1418,20 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 ),
               ),
             ),
+            if (videoDetailController.isPlayAll)
+              SizedBox.square(
+                dimension: 38,
+                child: IconButton(
+                  tooltip: videoDetailController.watchLaterTitle,
+                  onPressed: () =>
+                      videoDetailController.showMediaListPanel(context),
+                  icon: Icon(
+                    Icons.playlist_play,
+                    size: 22,
+                    color: colorScheme.secondary,
+                  ),
+                ),
+              ),
             SizedBox.square(
               dimension: 38,
               child: Obx(
@@ -1690,58 +1704,13 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         SliverToBoxAdapter(
           child: SizedBox(
             height:
-                (videoDetailController.isPlayAll && !isPortrait
-                    ? 44
-                    : Style.safeSpace) +
+                Style.safeSpace +
                 padding.bottom,
           ),
         ),
       ],
     );
 
-    if (videoDetailController.isPlayAll) {
-      child = IntroLayout(
-        body: child,
-        playlist: Padding(
-          padding: .only(left: 12, right: 12, bottom: 6 + padding.bottom),
-          child: Material(
-            type: .transparency,
-            child: InkWell(
-              onTap: () => videoDetailController.showMediaListPanel(context),
-              borderRadius: const .all(.circular(10)),
-              child: Container(
-                height: 32,
-                padding: const .symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer.withValues(alpha: 0.9),
-                  borderRadius: const .all(.circular(10)),
-                ),
-                child: Row(
-                  spacing: 6,
-                  children: [
-                    const Icon(Icons.playlist_play, size: 18),
-                    Expanded(
-                      child: Text(
-                        videoDetailController.watchLaterTitle,
-                        maxLines: 1,
-                        overflow: .ellipsis,
-                        style: TextStyle(
-                          color: colorScheme.onSecondaryContainer,
-                          fontWeight: .w600,
-                          fontSize: 12,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.keyboard_arrow_up_rounded, size: 18),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
     return KeepAliveWrapper(child: child);
   }
 
