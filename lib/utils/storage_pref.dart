@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart'
@@ -247,6 +248,32 @@ abstract final class Pref {
     GlobalData().localPlaylistList = list;
   }
 
+
+  /// 将 Hive 读出的 _Map<dynamic,dynamic> 规范为 Map<String,dynamic>
+  static Map<String, dynamic> _normMap(dynamic v) {
+    if (v is! Map) return <String, dynamic>{};
+    final out = <String, dynamic>{};
+    v.forEach((k, val) {
+      final key = k is String ? k : '$k';
+      if (val is Map) {
+        out[key] = _normMap(val);
+      } else if (val is List) {
+        out[key] = val.map((e) => e is Map ? _normMap(e) : e).toList();
+      } else {
+        out[key] = val;
+      }
+    });
+    return out;
+  }
+
+  static List<Map<String, dynamic>> _normMapList(dynamic raw) {
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return [
+      for (final e in raw)
+        if (e is Map) _normMap(e),
+    ];
+  }
+
   /// 多播放列表：[{id,title,items:[{aid,bvid,cid,title,cover,authorName,authorMid,duration}]}]
   /// 兼容旧版扁平列表自动迁移为「默认列表」
   static List<Map> get localVideoPlaylists {
@@ -255,10 +282,10 @@ abstract final class Pref {
     // 旧格式：直接是视频 item
     final first = raw.first;
     if (first is Map && first.containsKey('items')) {
-      return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      return _normMapList(raw);
     }
     // 迁移
-    final items = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final items = _normMapList(raw);
     final migrated = [
       {
         'id': DateTime.now().millisecondsSinceEpoch,
@@ -271,23 +298,27 @@ abstract final class Pref {
   }
 
   static set localVideoPlaylists(List<Map> list) {
-    // 深拷贝为普通 Map/List，避免 Hive 嵌套类型读写异常
-    final encoded = list.map((pl) {
-      final m = Map<String, dynamic>.from(pl);
+    // 经 JSON 规范化，彻底去掉 Hive 的 _Map<dynamic,dynamic>
+    final encoded = <Map<String, dynamic>>[];
+    for (final pl in list) {
+      final m = _normMap(pl);
       final items = m['items'];
       if (items is List) {
-        m['items'] = items
-            .map((e) => e is Map ? Map<String, dynamic>.from(e) : e)
-            .toList();
+        m['items'] = [
+          for (final e in items)
+            if (e is Map) _normMap(e),
+        ];
       } else {
-        m['items'] = <Map>[];
+        m['items'] = <Map<String, dynamic>>[];
       }
       m['id'] = _plId(m['id']) ?? DateTime.now().millisecondsSinceEpoch;
       m['title'] = '${m['title'] ?? ''}';
-      return m;
-    }).toList();
-    _localCache.put(LocalCacheKey.localVideoPlaylist, encoded);
-    GlobalData().localVideoPlaylists = encoded;
+      encoded.add(m);
+    }
+    // 再过一遍 JSON，确保写入 Box 的全是纯 JSON 类型
+    final pure = jsonDecode(jsonEncode(encoded));
+    _localCache.put(LocalCacheKey.localVideoPlaylist, pure);
+    GlobalData().localVideoPlaylists = _normMapList(pure);
     GlobalData().localVideoPlaylistList = localVideoPlaylist;
   }
 
@@ -302,8 +333,8 @@ abstract final class Pref {
 
   static void _sortItems(List<Map> items) {
     items.sort((a, b) {
-      final ta = (a['title'] as String? ?? '').toLowerCase();
-      final tb = (b['title'] as String? ?? '').toLowerCase();
+      final ta = '${a['title'] ?? ''}'.toLowerCase();
+      final tb = '${b['title'] ?? ''}'.toLowerCase();
       return ta.compareTo(tb);
     });
   }
@@ -357,36 +388,34 @@ abstract final class Pref {
   static List<Map> getLocalVideoPlaylistItems(int? playlistId) {
     final pls = localVideoPlaylists;
     if (pls.isEmpty) return <Map>[];
-    Map pl;
+    Map<String, dynamic> pl;
     if (playlistId == null) {
-      pl = Map<String, dynamic>.from(pls.first);
+      pl = _normMap(pls.first);
     } else {
-      Map? found;
+      Map<String, dynamic>? found;
       for (final e in pls) {
         if (_plId(e['id']) == playlistId) {
-          found = Map<String, dynamic>.from(e);
+          found = _normMap(e);
           break;
         }
       }
-      pl = found ?? Map<String, dynamic>.from(pls.first);
+      pl = found ?? _normMap(pls.first);
     }
     final items = pl['items'];
     if (items is! List) return <Map>[];
-    return items
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
+    return _normMapList(items);
   }
 
   static void _setPlaylistItems(int playlistId, List<Map> items) {
-    _sortItems(items);
-    final pls = List<Map>.from(localVideoPlaylists);
+    final normalized = _normMapList(items);
+    _sortItems(normalized);
+    final pls = _normMapList(localVideoPlaylists);
     var matched = false;
     for (var i = 0; i < pls.length; i++) {
       if (_plId(pls[i]['id']) == playlistId) {
         pls[i] = {
-          ...Map<String, dynamic>.from(pls[i]),
-          'items': items,
+          ...pls[i],
+          'items': normalized,
         };
         matched = true;
         break;
@@ -395,8 +424,8 @@ abstract final class Pref {
     if (!matched && pls.isNotEmpty) {
       // 找不到 id 时写入第一个列表，避免“添加无效果”
       pls[0] = {
-        ...Map<String, dynamic>.from(pls[0]),
-        'items': items,
+        ...pls[0],
+        'items': normalized,
       };
     }
     localVideoPlaylists = pls;
@@ -438,7 +467,7 @@ abstract final class Pref {
     final list = getLocalVideoPlaylistItems(id);
     final key = bvid ?? 'av$aid';
     list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
-    list.add({
+    list.add(_normMap({
       'aid': aid,
       'bvid': bvid,
       'cid': cid,
@@ -447,7 +476,7 @@ abstract final class Pref {
       'authorName': authorName ?? '',
       'authorMid': authorMid,
       'duration': duration ?? 0,
-    });
+    }));
     _setPlaylistItems(id, list);
   }
 
