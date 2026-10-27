@@ -15,6 +15,8 @@ import 'package:PiliPlus/pages/member_video/widgets/video_card_h_member_video.da
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 class MemberVideo extends StatefulWidget {
@@ -52,6 +54,8 @@ class _MemberVideoState extends State<MemberVideo>
   bool get wantKeepAlive => true;
 
   late final MemberVideoCtr _controller;
+  bool _multiSelect = false;
+  final Set<String> _selected = {};
 
   void _jumpToIndex(int index) {
     final scrollOffset = gridDelegate.layoutCache!
@@ -226,9 +230,50 @@ class _MemberVideoState extends State<MemberVideo>
                           index == response.length - 1) {
                         _controller.onLoadMore();
                       }
-                      return VideoCardHMemberVideo(
-                        videoItem: response[index],
-                        fromViewAid: _controller.fromViewAid,
+                      final item = response[index];
+                      final key = _itemKey(item);
+                      final selected = _selected.contains(key);
+                      return Stack(
+                        children: [
+                          VideoCardHMemberVideo(
+                            videoItem: item,
+                            fromViewAid: _controller.fromViewAid,
+                            onTap: _multiSelect
+                                ? () {
+                                    setState(() {
+                                      if (selected) {
+                                        _selected.remove(key);
+                                      } else if (key.isNotEmpty) {
+                                        _selected.add(key);
+                                      }
+                                    });
+                                  }
+                                : null,
+                          ),
+                          if (_multiSelect)
+                            Positioned(
+                              left: 10,
+                              top: 10,
+                              child: IgnorePointer(
+                                child: Material(
+                                  color: Colors.black45,
+                                  shape: const CircleBorder(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Icon(
+                                      selected
+                                          ? Icons.check_circle
+                                          : Icons.circle_outlined,
+                                      size: 22,
+                                      color: selected
+                                          ? theme.colorScheme.primary
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       );
                     },
                     itemCount: response.length,
@@ -243,6 +288,98 @@ class _MemberVideoState extends State<MemberVideo>
     };
   }
 
+
+  String _itemKey(SpaceArchiveItem item) =>
+      item.bvid ?? (item.aid != null ? 'av${item.aid}' : item.param ?? '');
+
+  List<SpaceArchiveItem> get _currentItems {
+    if (_controller.loadingState.value case Success(:final response)) {
+      return List<SpaceArchiveItem>.from(response);
+    }
+    return const [];
+  }
+
+  void _toggleMulti() {
+    setState(() {
+      _multiSelect = !_multiSelect;
+      if (!_multiSelect) _selected.clear();
+    });
+  }
+
+  void _selectAll() {
+    final items = _currentItems;
+    setState(() {
+      if (_selected.length == items.length && items.isNotEmpty) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(items.map(_itemKey).where((k) => k.isNotEmpty));
+      }
+    });
+  }
+
+  Future<void> _addSelectedToPlaylist() async {
+    final items = _currentItems
+        .where((e) => _selected.contains(_itemKey(e)))
+        .toList();
+    if (items.isEmpty) {
+      SmartDialog.showToast('请先选择视频');
+      return;
+    }
+    final pls = Pref.localVideoPlaylists;
+    int? targetId;
+    if (pls.isEmpty) {
+      targetId = Pref.createLocalVideoPlaylist('默认列表');
+    } else if (pls.length == 1) {
+      targetId = pls.first['id'] as int?;
+    } else {
+      targetId = await showDialog<int>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('选择播放列表'),
+          children: [
+            for (final pl in pls)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, pl['id'] as int),
+                child: Text(
+                  '${pl['title']} (${(pl['items'] is List) ? (pl['items'] as List).length : 0})',
+                ),
+              ),
+            SimpleDialogOption(
+              onPressed: () {
+                final id = Pref.createLocalVideoPlaylist('列表 ${pls.length + 1}');
+                Navigator.pop(ctx, id);
+              },
+              child: const Text('+ 新建列表'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (targetId == null) return;
+    Pref.addLocalVideoPlaylistItems(
+      items
+          .map((e) => {
+                'aid': e.aid,
+                'bvid': e.bvid,
+                'cid': e.cid,
+                'title': e.title,
+                'cover': e.cover,
+                'authorName': e.owner?.name,
+                'authorMid': e.owner?.mid == 0 ? widget.mid : e.owner?.mid,
+                'duration': e.duration > 0 ? e.duration : 0,
+              })
+          .toList(),
+      playlistId: targetId,
+    );
+    SmartDialog.showToast('已加入 ${items.length} 个视频');
+    setState(() {
+      _multiSelect = false;
+      _selected.clear();
+    });
+  }
+
   Widget _buildHeader(ThemeData theme) {
     return SliverFloatingHeaderWidget(
       backgroundColor: theme.colorScheme.surface,
@@ -250,10 +387,65 @@ class _MemberVideoState extends State<MemberVideo>
         padding: const EdgeInsets.fromLTRB(14, 2.5, 8, 2.5),
         child: Row(
           children: [
-            ?_buildCount(),
-            ?_buildEpisodeBtn(theme),
-            const Spacer(),
-            _buildSortBtn(theme),
+            if (_multiSelect) ...[
+              TextButton(
+                style: Style.buttonStyle,
+                onPressed: _selectAll,
+                child: Text(
+                  _selected.length == _currentItems.length &&
+                          _currentItems.isNotEmpty
+                      ? '取消全选'
+                      : '全选',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+              ),
+              TextButton(
+                style: Style.buttonStyle,
+                onPressed: _addSelectedToPlaylist,
+                child: Text(
+                  '加入播放列表${_selected.isEmpty ? '' : '(${_selected.length})'}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+              ),
+              TextButton(
+                style: Style.buttonStyle,
+                onPressed: _toggleMulti,
+                child: Text(
+                  '取消',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
+            ] else ...[
+              ?_buildCount(),
+              ?_buildEpisodeBtn(theme),
+              const Spacer(),
+              TextButton.icon(
+                style: Style.buttonStyle,
+                onPressed: _toggleMulti,
+                icon: Icon(
+                  Icons.checklist,
+                  size: 16,
+                  color: theme.colorScheme.secondary,
+                ),
+                label: Text(
+                  '多选',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.secondary,
+                  ),
+                ),
+              ),
+              _buildSortBtn(theme),
+            ],
           ],
         ),
       ),
