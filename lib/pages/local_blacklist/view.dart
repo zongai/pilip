@@ -50,9 +50,20 @@ class _LocalBlackListPageState extends State<LocalBlackListPage> {
       child: Scaffold(
       appBar: AppBar(
         title: Text('本地黑名单${_mids.isEmpty ? '' : ' · ${_mids.length}'}'),
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Get.back(),
+          tooltip: '返回',
+          onPressed: () {
+            final nav = Navigator.of(context);
+            if (nav.canPop()) {
+              nav.pop();
+            } else if (Get.key.currentState?.canPop() == true) {
+              Get.back();
+            } else {
+              Get.until((route) => route.isFirst);
+            }
+          },
         ),
       ),
       body: _mids.isEmpty

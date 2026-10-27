@@ -75,9 +75,20 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
       child: Scaffold(
       appBar: AppBar(
         title: Text('观看记录${_list.isEmpty ? '' : ' · ${_list.length}'}'),
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Get.back(),
+          tooltip: '返回',
+          onPressed: () {
+            final nav = Navigator.of(context);
+            if (nav.canPop()) {
+              nav.pop();
+            } else if (Get.key.currentState?.canPop() == true) {
+              Get.back();
+            } else {
+              Get.until((route) => route.isFirst);
+            }
+          },
         ),
         actions: [
           if (_list.isNotEmpty)

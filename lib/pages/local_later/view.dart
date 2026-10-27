@@ -77,9 +77,20 @@ class _LocalLaterPageState extends State<LocalLaterPage> {
       child: Scaffold(
       appBar: AppBar(
         title: Text('稍后再看${_list.isEmpty ? '' : ' · ${_list.length}'}'),
+        automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Get.back(),
+          tooltip: '返回',
+          onPressed: () {
+            final nav = Navigator.of(context);
+            if (nav.canPop()) {
+              nav.pop();
+            } else if (Get.key.currentState?.canPop() == true) {
+              Get.back();
+            } else {
+              Get.until((route) => route.isFirst);
+            }
+          },
         ),
         actions: [
           if (_list.isNotEmpty)
