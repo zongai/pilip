@@ -367,6 +367,9 @@ abstract final class Pref {
     return ka.length.compareTo(kb.length);
   }
 
+  /// 公开：按标题自然比较（春天 09-1 < 春天 14-01）
+  static int natCompareTitle(String a, String b) => _natCompare(a, b);
+
   static void _sortItems(List<Map> items) {
     items.sort((a, b) {
       final ta = '${a['title'] ?? ''}';

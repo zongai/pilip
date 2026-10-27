@@ -212,6 +212,10 @@ class _LocalVideoPlaylistDetailPageState
   void _refresh() {
     try {
       final items = Pref.getLocalVideoPlaylistItems(widget.playlistId);
+      items.sort((a, b) => Pref.natCompareTitle(
+            '${a['title'] ?? ''}',
+            '${b['title'] ?? ''}',
+          ));
       setState(() {
         _list = items;
         _error = null;
@@ -227,7 +231,13 @@ class _LocalVideoPlaylistDetailPageState
   String _key(Map item) => item['bvid'] as String? ?? 'av${item['aid']}';
 
   List<Map> _toArgMaps() {
-    return _list
+    // 保证传给播放页的顺序为自然排序
+    final sorted = List<Map>.from(_list);
+    sorted.sort((a, b) => Pref.natCompareTitle(
+          '${a['title'] ?? ''}',
+          '${b['title'] ?? ''}',
+        ));
+    return sorted
         .map(
           (e) => {
             'aid': _asInt(e['aid']),

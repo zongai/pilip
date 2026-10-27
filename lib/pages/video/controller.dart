@@ -627,6 +627,8 @@ class VideoDetailController extends GetxController
       } catch (_) {}
     }
     if (items.isEmpty) return false;
+    // 按标题自然排序（春天 09-1 在 春天 14-01 前）
+    items.sort((a, b) => Pref.natCompareTitle(a.title ?? '', b.title ?? ''));
     mediaList.assignAll(items);
     isLocalMediaList = true;
     isPlayAll = true;
@@ -634,27 +636,33 @@ class VideoDetailController extends GetxController
   }
 
   void showMediaListPanel(BuildContext context) {
-    // 本地连播：每次打开侧栏都从 Pref/session 强制重载，避免空白
+    // 本地连播：每次打开侧栏都强制从 Pref/session 重载
+    final gd = GlobalData();
     final hasLocalHint = isLocalMediaList ||
-        GlobalData().sessionLocalPlaylistId != null ||
-        GlobalData().pendingLocalPlaylistId != null ||
+        gd.sessionLocalPlaylistId != null ||
+        gd.pendingLocalPlaylistId != null ||
         args['localPlaylistId'] != null ||
         args['localMediaList'] is List ||
-        (GlobalData().sessionLocalMediaList is List &&
-            (GlobalData().sessionLocalMediaList as List).isNotEmpty);
-    if (mediaList.isEmpty || hasLocalHint) {
-      _fillLocalMediaList(
-        maps: GlobalData().sessionLocalMediaList ??
-            GlobalData().pendingLocalMediaList ??
+        (gd.sessionLocalMediaList is List &&
+            (gd.sessionLocalMediaList as List).isNotEmpty);
+    if (hasLocalHint) {
+      final ok = _fillLocalMediaList(
+        maps: gd.sessionLocalMediaList ??
+            gd.pendingLocalMediaList ??
             args['localMediaList'],
-        playlistId: GlobalData().sessionLocalPlaylistId ??
-            GlobalData().pendingLocalPlaylistId,
+        playlistId: gd.sessionLocalPlaylistId ?? gd.pendingLocalPlaylistId,
       );
-      if (GlobalData().sessionLocalMediaTitle != null) {
-        watchLaterTitle = GlobalData().sessionLocalMediaTitle!;
+      if (gd.sessionLocalMediaTitle != null) {
+        watchLaterTitle = gd.sessionLocalMediaTitle!;
       }
+      if (!ok && mediaList.isEmpty) {
+        SmartDialog.showToast('本地播放列表为空或加载失败');
+      }
+    } else if (mediaList.isEmpty) {
+      // no-op, fall through
     }
     if (mediaList.isNotEmpty) {
+      mediaList.refresh();
       Widget panel() => MediaListPanel(
         mediaList: mediaList,
         onChangeEpisode: (episode) {
@@ -664,8 +672,8 @@ class VideoDetailController extends GetxController
         },
         panelTitle: watchLaterTitle,
         bvid: bvid,
-        count: args['count'],
-        loadMoreMedia: getMediaList,
+        count: isLocalMediaList ? mediaList.length : args['count'],
+        loadMoreMedia: isLocalMediaList ? () async {} : getMediaList,
         desc: _mediaDesc,
         onReverse: () {
           _mediaDesc = !_mediaDesc;
@@ -675,9 +683,11 @@ class VideoDetailController extends GetxController
             getMediaList(isReverse: true);
           }
         },
-        loadPrevious: args['isContinuePlaying'] == true
-            ? () => getMediaList(isLoadPrevious: true)
-            : null,
+        loadPrevious: isLocalMediaList
+            ? null
+            : (args['isContinuePlaying'] == true
+                ? () => getMediaList(isLoadPrevious: true)
+                : null),
         onDelete: isLocalMediaList
             ? (item, index) async {
                 // 本地列表：仅从当前侧栏移除
