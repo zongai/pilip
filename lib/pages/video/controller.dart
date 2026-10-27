@@ -447,8 +447,10 @@ class VideoDetailController extends GetxController
       if (v is num) return v.toInt();
       return int.tryParse('$v');
     }
-    final pending = GlobalData().pendingLocalMediaList;
-    final pendingId = GlobalData().pendingLocalPlaylistId ??
+    final gd = GlobalData();
+    final pending = gd.pendingLocalMediaList ?? gd.sessionLocalMediaList;
+    final pendingId = gd.pendingLocalPlaylistId ??
+        gd.sessionLocalPlaylistId ??
         asInt(args['localPlaylistId']);
     final hasPendingLocal = (pending != null && pending.isNotEmpty) ||
         pendingId != null;
@@ -464,8 +466,10 @@ class VideoDetailController extends GetxController
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
-      watchLaterTitle =
-          args['favTitle'] ?? GlobalData().pendingLocalMediaTitle ?? '播放列表';
+      watchLaterTitle = args['favTitle'] ??
+          gd.pendingLocalMediaTitle ??
+          gd.sessionLocalMediaTitle ??
+          '播放列表';
       _mediaDesc = args['desc'] == true || args['desc'] == 1;
       final filled = _fillLocalMediaList(
         maps: args['localMediaList'] ?? pending,
@@ -475,7 +479,7 @@ class VideoDetailController extends GetxController
         // 非本地列表才走官方接口
         getMediaList();
       } else {
-        // 成功后清理 pending，避免污染下次打开
+        // 只清 pending；session 保留供侧栏随时重载
         GlobalData().pendingLocalMediaList = null;
         GlobalData().pendingLocalMediaTitle = null;
         GlobalData().pendingLocalPlaylistId = null;
@@ -564,6 +568,11 @@ class VideoDetailController extends GetxController
       return int.tryParse('$v');
     }
 
+    // 合并所有可能的 id 来源
+    playlistId ??= GlobalData().sessionLocalPlaylistId ??
+        GlobalData().pendingLocalPlaylistId ??
+        asInt(args['localPlaylistId']);
+
     List raw = const [];
     // 1) 优先按 playlistId 从本地存储读取（最可靠）
     if (playlistId != null) {
@@ -571,9 +580,15 @@ class VideoDetailController extends GetxController
         raw = Pref.getLocalVideoPlaylistItems(playlistId);
       } catch (_) {}
     }
-    // 2) 再用 pending / 路由参数
-    if (raw.isEmpty && maps is List && maps.isNotEmpty) {
-      raw = List.from(maps);
+    // 2) 再用传入 / session / pending / 路由参数
+    if (raw.isEmpty) {
+      final fallback = maps ??
+          GlobalData().sessionLocalMediaList ??
+          GlobalData().pendingLocalMediaList ??
+          args['localMediaList'];
+      if (fallback is List && fallback.isNotEmpty) {
+        raw = List.from(fallback);
+      }
     }
     if (raw.isEmpty) return false;
 
@@ -619,19 +634,25 @@ class VideoDetailController extends GetxController
   }
 
   void showMediaListPanel(BuildContext context) {
-    // 本地列表尚未填充时再尝试一次（按 playlistId 或 pending）
-    if (mediaList.isEmpty) {
-      int? asInt(dynamic v) {
-        if (v == null) return null;
-        if (v is int) return v;
-        if (v is num) return v.toInt();
-        return int.tryParse('$v');
-      }
+    // 本地连播：每次打开侧栏都从 Pref/session 强制重载，避免空白
+    final hasLocalHint = isLocalMediaList ||
+        GlobalData().sessionLocalPlaylistId != null ||
+        GlobalData().pendingLocalPlaylistId != null ||
+        args['localPlaylistId'] != null ||
+        args['localMediaList'] is List ||
+        (GlobalData().sessionLocalMediaList is List &&
+            (GlobalData().sessionLocalMediaList as List).isNotEmpty);
+    if (mediaList.isEmpty || hasLocalHint) {
       _fillLocalMediaList(
-        maps: GlobalData().pendingLocalMediaList ?? args['localMediaList'],
-        playlistId: GlobalData().pendingLocalPlaylistId ??
-            asInt(args['localPlaylistId']),
+        maps: GlobalData().sessionLocalMediaList ??
+            GlobalData().pendingLocalMediaList ??
+            args['localMediaList'],
+        playlistId: GlobalData().sessionLocalPlaylistId ??
+            GlobalData().pendingLocalPlaylistId,
       );
+      if (GlobalData().sessionLocalMediaTitle != null) {
+        watchLaterTitle = GlobalData().sessionLocalMediaTitle!;
+      }
     }
     if (mediaList.isNotEmpty) {
       Widget panel() => MediaListPanel(
@@ -657,8 +678,12 @@ class VideoDetailController extends GetxController
         loadPrevious: args['isContinuePlaying'] == true
             ? () => getMediaList(isLoadPrevious: true)
             : null,
-        onDelete:
-            sourceType == SourceType.watchLater ||
+        onDelete: isLocalMediaList
+            ? (item, index) async {
+                // 本地列表：仅从当前侧栏移除
+                mediaList.removeAt(index);
+              }
+            : sourceType == SourceType.watchLater ||
                 (sourceType == SourceType.fav && args['isOwner'] == true)
             ? (item, index) async {
                 if (sourceType == SourceType.watchLater) {

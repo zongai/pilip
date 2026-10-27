@@ -25,6 +25,10 @@ class GlobalData {
   List? pendingLocalMediaList;
   String? pendingLocalMediaTitle;
   int? pendingLocalPlaylistId;
+  /// 当前连播会话的列表（播放页侧栏直接使用，不在中途清空）
+  List? sessionLocalMediaList;
+  String? sessionLocalMediaTitle;
+  int? sessionLocalPlaylistId;
   Set<int> localFollowMids = {
     for (final e in Pref.localFollows)
       if (e['mid'] is int) e['mid'] as int
