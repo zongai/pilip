@@ -554,6 +554,70 @@ class VideoDetailController extends GetxController
     }
   }
 
+
+  /// 将本地 map 列表转为 MediaListItemModel 并填入 mediaList
+  bool _fillLocalMediaList({Object? maps, int? playlistId}) {
+    int? asInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v');
+    }
+
+    List raw = const [];
+    // 1) 优先按 playlistId 从本地存储读取（最可靠）
+    if (playlistId != null) {
+      try {
+        raw = Pref.getLocalVideoPlaylistItems(playlistId);
+      } catch (_) {}
+    }
+    // 2) 再用 pending / 路由参数
+    if (raw.isEmpty && maps is List && maps.isNotEmpty) {
+      raw = List.from(maps);
+    }
+    if (raw.isEmpty) return false;
+
+    final items = <MediaListItemModel>[];
+    for (final e in raw) {
+      try {
+        if (e is MediaListItemModel) {
+          items.add(e);
+          continue;
+        }
+        if (e is! Map) continue;
+        final m = <String, dynamic>{
+          for (final entry in e.entries) '${entry.key}': entry.value,
+        };
+        final cid = asInt(m['cid']);
+        final aid = asInt(m['aid']);
+        var bvid = m['bvid']?.toString();
+        if ((bvid == null || bvid.isEmpty) && aid != null) {
+          try {
+            bvid = IdUtils.av2bv(aid);
+          } catch (_) {}
+        }
+        if (aid == null && (bvid == null || bvid.isEmpty)) continue;
+        items.add(
+          MediaListItemModel(
+            aid: aid,
+            bvid: bvid,
+            title: m['title']?.toString() ?? '',
+            cover: m['cover']?.toString(),
+            duration: asInt(m['duration']),
+            type: 2,
+            cid: cid,
+            pages: cid != null ? [media_page.Page(id: cid)] : null,
+          ),
+        );
+      } catch (_) {}
+    }
+    if (items.isEmpty) return false;
+    mediaList.assignAll(items);
+    isLocalMediaList = true;
+    isPlayAll = true;
+    return true;
+  }
+
   void showMediaListPanel(BuildContext context) {
     // 本地列表尚未填充时再尝试一次（按 playlistId 或 pending）
     if (mediaList.isEmpty) {
