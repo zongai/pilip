@@ -65,19 +65,22 @@ class VideoPopupMenu extends StatelessWidget {
                     '加入本地播放列表',
                     const Icon(Icons.playlist_add, size: 16),
                     () {
+                      final int? aid = videoItem is BaseVideoItemModel
+                          ? (videoItem as BaseVideoItemModel).aid
+                          : (videoItem.bvid != null
+                              ? IdUtils.bv2av(videoItem.bvid!)
+                              : null);
                       Pref.addLocalVideoPlaylistItem(
-                        aid: videoItem.aid,
+                        aid: aid,
                         bvid: videoItem.bvid,
                         cid: videoItem.cid,
                         title: videoItem.title,
                         cover: videoItem.cover,
                         authorName: videoItem.owner.name,
                         authorMid: videoItem.owner.mid,
-                        duration: () {
-                          final d = videoItem.duration;
-                          if (d is int) return d;
-                          return int.tryParse('$d');
-                        }(),
+                        duration: videoItem.duration > 0
+                            ? videoItem.duration
+                            : null,
                       );
                       SmartDialog.showToast('已加入本地播放列表');
                     },

@@ -36,7 +36,8 @@ jobs:
 
       - name: Build iOS
         run: |
-          flutter build ios --release --no-codesign --dart-define-from-file=pili_release.json --no-pub
+          # 强制无签名构建（SideStore / 自签）
+          flutter build ios --release --no-codesign --dart-define-from-file=pili_release.json --no-pub             || xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner                  -configuration Release -sdk iphoneos                  -destination 'generic/platform=iOS'                  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-                  build
           ln -sf ./build/ios/iphoneos Payload
           # make AltSign happy...
           find Payload/Runner.app/Frameworks -type d -name "*.framework" -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;

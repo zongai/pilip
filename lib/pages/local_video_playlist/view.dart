@@ -2,7 +2,7 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/models_new/media_list/media_list.dart';
-import 'package:PiliPlus/models_new/media_list/page.dart';
+import 'package:PiliPlus/models_new/media_list/page.dart' as media_page;
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -51,7 +51,7 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
         duration: e['duration'] as int?,
         cid: cid,
         type: 2,
-        pages: cid != null ? [Page(id: cid)] : null,
+        pages: cid != null ? [media_page.Page(id: cid)] : null,
       );
     }).toList();
   }
@@ -79,7 +79,7 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
     if (index < mediaList.length) {
       mediaList[index]
         ..cid = cid
-        ..pages = [Page(id: cid)];
+        ..pages = [media_page.Page(id: cid)];
     }
     PageUtils.toVideoPage(
       bvid: bvid,
