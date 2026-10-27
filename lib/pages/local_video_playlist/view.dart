@@ -1,4 +1,7 @@
+import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
@@ -97,7 +100,7 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final outline = theme.colorScheme.outline;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -109,33 +112,18 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
             icon: const Icon(Icons.add),
             onPressed: _create,
           ),
+          const SizedBox(width: 6),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _create,
-        icon: const Icon(Icons.playlist_add),
-        label: const Text('新建'),
       ),
       body: _playlists.isEmpty
           ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.queue_music, size: 64, color: cs.outline),
-                  const SizedBox(height: 12),
-                  Text('还没有播放列表', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    '点击下方按钮新建，或在视频菜单中加入',
-                    style: theme.textTheme.bodySmall?.copyWith(color: cs.outline),
-                  ),
-                ],
+              child: Text(
+                '暂无播放列表',
+                style: TextStyle(color: outline),
               ),
             )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+          : ListView.builder(
               itemCount: _playlists.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final pl = _playlists[index];
                 final rawItems = pl['items'];
@@ -147,55 +135,67 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
                 }
                 final id = _asInt(pl['id']);
                 return Material(
-                  color: cs.surfaceContainerHighest.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(12),
-                  clipBehavior: Clip.antiAlias,
+                  type: MaterialType.transparency,
                   child: InkWell(
                     onTap: () => _open(pl),
+                    onLongPress: () async {
+                      if (id == null) return;
+                      // 与收藏夹一致：长按菜单
+                    },
                     child: Padding(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: NetworkImgLayer(
-                              width: 88,
-                              height: 55,
-                              src: cover,
+                          AspectRatio(
+                            aspectRatio: Style.aspectRatio,
+                            child: LayoutBuilder(
+                              builder: (context, boxConstraints) {
+                                return NetworkImgLayer(
+                                  src: cover,
+                                  width: boxConstraints.maxWidth,
+                                  height: boxConstraints.maxHeight,
+                                );
+                              },
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
+                            child: SizedBox(
+                              height: 85,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(letterSpacing: 0.3),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${items.length} 个视频 · 按标题排序',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: cs.outline,
+                                  const Spacer(),
+                                  Text(
+                                    '${items.length}个内容',
+                                    style: TextStyle(
+                                      fontSize:
+                                          theme.textTheme.labelMedium!.fontSize,
+                                      color: outline,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                          if (items.isNotEmpty)
-                            IconButton(
-                              tooltip: '连续播放',
-                              icon: Icon(Icons.play_circle_fill, color: cs.primary, size: 32),
-                              onPressed: () async {
-                                if (id == null) return;
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              if (id == null) return;
+                              if (v == 'play' && items.isNotEmpty) {
                                 await Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => LocalVideoPlaylistDetailPage(
+                                    builder: (_) =>
+                                        LocalVideoPlaylistDetailPage(
                                       playlistId: id,
                                       title: title,
                                       autoPlay: true,
@@ -203,13 +203,9 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
                                   ),
                                 );
                                 if (mounted) _refresh();
-                              },
-                            ),
-                          PopupMenuButton<String>(
-                            onSelected: (v) async {
-                              if (id == null) return;
-                              if (v == 'rename') {
-                                final ctrl = TextEditingController(text: title);
+                              } else if (v == 'rename') {
+                                final ctrl =
+                                    TextEditingController(text: title);
                                 final name = await showDialog<String>(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
@@ -217,18 +213,15 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
                                     content: TextField(
                                       controller: ctrl,
                                       autofocus: true,
-                                      decoration: const InputDecoration(
-                                        hintText: '列表名称',
-                                      ),
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(ctx),
                                         child: const Text('取消'),
                                       ),
-                                      FilledButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx, ctrl.text.trim()),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(
+                                            ctx, ctrl.text.trim()),
                                         child: const Text('确定'),
                                       ),
                                     ],
@@ -239,33 +232,25 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
                                   _refresh();
                                 }
                               } else if (v == 'delete') {
-                                final ok = await showDialog<bool>(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    title: const Text('删除播放列表'),
-                                    content: Text('确定删除「$title」？'),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.pop(ctx, false),
-                                        child: const Text('取消'),
-                                      ),
-                                      FilledButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
-                                        child: const Text('删除'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (ok == true) {
-                                  Pref.deleteLocalVideoPlaylist(id);
-                                  SmartDialog.showToast('已删除');
-                                  _refresh();
-                                }
+                                Pref.deleteLocalVideoPlaylist(id);
+                                SmartDialog.showToast('已删除');
+                                _refresh();
                               }
                             },
-                            itemBuilder: (context) => const [
-                              PopupMenuItem(value: 'rename', child: Text('重命名')),
-                              PopupMenuItem(value: 'delete', child: Text('删除')),
+                            itemBuilder: (context) => [
+                              if (items.isNotEmpty)
+                                const PopupMenuItem(
+                                  value: 'play',
+                                  child: Text('连续播放'),
+                                ),
+                              const PopupMenuItem(
+                                value: 'rename',
+                                child: Text('重命名'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('删除'),
+                              ),
                             ],
                           ),
                         ],
@@ -540,7 +525,7 @@ class _LocalVideoPlaylistDetailPageState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final outline = theme.colorScheme.outline;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -570,10 +555,7 @@ class _LocalVideoPlaylistDetailPageState
             ),
             TextButton(
               onPressed: _selected.isEmpty ? null : _removeSelected,
-              child: Text(
-                '删除',
-                style: TextStyle(color: _selected.isEmpty ? null : cs.error),
-              ),
+              child: const Text('删除'),
             ),
             TextButton(
               onPressed: () => setState(() {
@@ -583,6 +565,11 @@ class _LocalVideoPlaylistDetailPageState
               child: const Text('完成'),
             ),
           ] else ...[
+            if (_list.isNotEmpty)
+              TextButton(
+                onPressed: () => _playFrom(0),
+                child: const Text('连续播放'),
+              ),
             IconButton(
               tooltip: '从历史加入',
               icon: const Icon(Icons.history),
@@ -594,6 +581,7 @@ class _LocalVideoPlaylistDetailPageState
                 icon: const Icon(Icons.checklist_rtl),
                 onPressed: () => setState(() => _multi = true),
               ),
+            const SizedBox(width: 6),
           ],
         ],
       ),
@@ -601,223 +589,160 @@ class _LocalVideoPlaylistDetailPageState
           ? Center(child: Text('加载失败\n$_error', textAlign: TextAlign.center))
           : _list.isEmpty
           ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.video_library_outlined,
-                        size: 64, color: cs.outline),
-                    const SizedBox(height: 16),
-                    Text('列表还是空的', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      '在视频页点「⋯」加入本地播单\n或点右上角从观看历史多选加入',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: cs.outline),
-                    ),
-                    const SizedBox(height: 20),
-                    FilledButton.tonalIcon(
-                      onPressed: _addFromHistory,
-                      icon: const Icon(Icons.history),
-                      label: const Text('从历史加入'),
-                    ),
-                  ],
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('列表为空', style: TextStyle(color: outline)),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: _addFromHistory,
+                    child: const Text('从历史加入'),
+                  ),
+                ],
               ),
             )
-          : Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    itemCount: _list.length,
-                    itemBuilder: (context, index) {
-                      final item = _list[index];
-                      final title = item['title'] as String? ?? '';
-                      final cover = item['cover'] as String?;
-                      final author = item['authorName'] as String? ?? '';
-                      final duration = _asInt(item['duration']) ?? 0;
-                      final k = _key(item);
-                      final selected = _selected.contains(k);
-                      return InkWell(
-                        onTap: () {
-                          if (_multi) {
-                            setState(() {
-                              if (selected) {
-                                _selected.remove(k);
-                              } else {
-                                _selected.add(k);
-                              }
-                            });
+          : ListView.builder(
+              itemCount: _list.length,
+              itemBuilder: (context, index) {
+                final item = _list[index];
+                final title = item['title'] as String? ?? '';
+                final cover = item['cover'] as String?;
+                final author = item['authorName'] as String? ?? '';
+                final duration = _asInt(item['duration']) ?? 0;
+                final k = _key(item);
+                final selected = _selected.contains(k);
+                return Material(
+                  type: MaterialType.transparency,
+                  color: selected
+                      ? theme.colorScheme.secondaryContainer
+                          .withValues(alpha: 0.4)
+                      : null,
+                  child: InkWell(
+                    onTap: () {
+                      if (_multi) {
+                        setState(() {
+                          if (selected) {
+                            _selected.remove(k);
                           } else {
-                            _playFrom(index);
+                            _selected.add(k);
                           }
-                        },
-                        onLongPress: () {
-                          if (!_multi) {
-                            setState(() {
-                              _multi = true;
-                              _selected.add(k);
-                            });
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (_multi)
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(right: 4, top: 16),
-                                  child: Checkbox(
-                                    value: selected,
-                                    onChanged: (v) {
-                                      setState(() {
-                                        if (v == true) {
-                                          _selected.add(k);
-                                        } else {
-                                          _selected.remove(k);
-                                        }
-                                      });
-                                    },
-                                  ),
-                                )
-                              else
-                                SizedBox(
-                                  width: 28,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(top: 22),
-                                    child: Text(
-                                      '${index + 1}',
-                                      textAlign: TextAlign.center,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(color: cs.outline),
-                                    ),
-                                  ),
-                                ),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Stack(
+                        });
+                      } else {
+                        _playFrom(index);
+                      }
+                    },
+                    onLongPress: () {
+                      if (!_multi) {
+                        setState(() {
+                          _multi = true;
+                          _selected.add(k);
+                        });
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Style.safeSpace,
+                        vertical: 5,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_multi)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8, top: 20),
+                              child: Checkbox(
+                                value: selected,
+                                onChanged: (v) {
+                                  setState(() {
+                                    if (v == true) {
+                                      _selected.add(k);
+                                    } else {
+                                      _selected.remove(k);
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          AspectRatio(
+                            aspectRatio: Style.aspectRatio,
+                            child: LayoutBuilder(
+                              builder: (context, boxConstraints) {
+                                final w = boxConstraints.maxWidth;
+                                final h = boxConstraints.maxHeight;
+                                return Stack(
+                                  clipBehavior: Clip.none,
                                   children: [
                                     NetworkImgLayer(
-                                      width: 120,
-                                      height: 68,
                                       src: cover,
+                                      width: w,
+                                      height: h,
                                     ),
                                     if (duration > 0)
-                                      Positioned(
-                                        right: 4,
-                                        bottom: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 1,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black87,
-                                            borderRadius:
-                                                BorderRadius.circular(3),
-                                          ),
-                                          child: Text(
-                                            DurationUtils.formatDuration(
-                                                duration),
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                            ),
-                                          ),
+                                      PBadge(
+                                        text: DurationUtils.formatDuration(
+                                          duration,
                                         ),
+                                        right: 6.0,
+                                        bottom: 6.0,
+                                        type: PBadgeType.gray,
                                       ),
                                   ],
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 68,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        title.isEmpty ? '无标题' : title,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      if (author.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          author,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(color: cs.outline),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              if (!_multi)
-                                IconButton(
-                                  tooltip: '移除',
-                                  icon: Icon(Icons.close,
-                                      size: 18, color: cs.outline),
-                                  onPressed: () {
-                                    Pref.removeLocalVideoPlaylistItem(
-                                      playlistId: widget.playlistId,
-                                      aid: _asInt(item['aid']),
-                                      bvid: item['bvid'] as String?,
-                                    );
-                                    _refresh();
-                                  },
-                                ),
-                            ],
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (!_multi && _list.isNotEmpty)
-                  SafeArea(
-                    top: false,
-                    child: Material(
-                      elevation: 6,
-                      color: cs.surfaceContainerHighest,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '共 ${_list.length} 个 · 按标题自然排序',
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: cs.outline),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: SizedBox(
+                              height: 85,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title.isEmpty ? '无标题' : title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: theme
+                                          .textTheme.bodyMedium!.fontSize,
+                                      height: 1.42,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  if (author.isNotEmpty)
+                                    Text(
+                                      author,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: outline,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            FilledButton.icon(
-                              onPressed: () => _playFrom(0),
-                              icon: const Icon(Icons.play_arrow, size: 20),
-                              label: const Text('连续播放'),
+                          ),
+                          if (!_multi)
+                            IconButton(
+                              tooltip: '移除',
+                              icon: const Icon(Icons.close_outlined, size: 18),
+                              onPressed: () {
+                                Pref.removeLocalVideoPlaylistItem(
+                                  playlistId: widget.playlistId,
+                                  aid: _asInt(item['aid']),
+                                  bvid: item['bvid'] as String?,
+                                );
+                                _refresh();
+                              },
                             ),
-                          ],
-                        ),
+                        ],
                       ),
                     ),
                   ),
-              ],
+                );
+              },
             ),
     );
   }

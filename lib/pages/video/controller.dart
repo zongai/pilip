@@ -4,6 +4,8 @@ import 'dart:math' show min;
 import 'dart:ui';
 
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/badge.dart';
+import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
@@ -722,7 +724,6 @@ class VideoDetailController extends GetxController
       Widget localPanel() {
         final theme = Theme.of(context);
         final cs = theme.colorScheme;
-        // 当前项索引，用于初始滚动
         int currIndex = 0;
         for (var i = 0; i < raw.length; i++) {
           final bv = raw[i]['bvid']?.toString();
@@ -732,162 +733,152 @@ class VideoDetailController extends GetxController
           }
         }
         final scrollCtrl = ScrollController(
-          initialScrollOffset: currIndex > 0 ? currIndex * 84.0 : 0,
+          initialScrollOffset: currIndex <= 0 ? 0 : currIndex * 112.0 + 7,
         );
         return Material(
           color: cs.surface,
           child: SizedBox(
-            height: screenH * 0.58,
+            height: screenH * 0.65,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  height: 48,
+                Container(
+                  height: 45,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: cs.outline.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ),
                   child: Row(
                     children: [
                       const SizedBox(width: 16),
-                      Icon(Icons.queue_music, size: 20, color: cs.primary),
-                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '${panelTitle.isNotEmpty ? panelTitle : '本地播放列表'} · ${raw.length}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          style: const TextStyle(fontSize: 16),
                         ),
                       ),
                       IconButton(
+                        iconSize: 20,
                         tooltip: '关闭',
-                        icon: const Icon(Icons.close, size: 20),
+                        icon: const Icon(Icons.close),
                         onPressed: Get.back,
                       ),
+                      const SizedBox(width: 14),
                     ],
                   ),
                 ),
-                Divider(height: 1, color: cs.outlineVariant),
                 Expanded(
                   child: ListView.builder(
                     controller: scrollCtrl,
+                    padding: EdgeInsets.only(
+                      top: 7,
+                      bottom: MediaQuery.viewPaddingOf(context).bottom + 24,
+                    ),
+                    itemExtent: 112,
                     itemCount: raw.length,
                     itemBuilder: (context, index) {
                       final m = raw[index];
-                      final t = '${m['title'] ?? ''}';
+                      final title = '${m['title'] ?? ''}';
                       final cover = '${m['cover'] ?? ''}';
                       final itemBvid = m['bvid']?.toString();
                       final duration = asInt(m['duration']) ?? 0;
+                      final author = '${m['authorName'] ?? ''}';
                       final isCurr = itemBvid != null &&
                           itemBvid.isNotEmpty &&
                           itemBvid == currentBvid;
-                      return Material(
-                        color: isCurr
-                            ? cs.primaryContainer.withValues(alpha: 0.45)
-                            : null,
-                        child: InkWell(
-                          onTap: () {
-                            Get.back();
-                            final targetAid = asInt(m['aid']);
-                            MediaListItemModel? ep;
-                            if (mediaList.isNotEmpty) {
-                              final i = mediaList.indexWhere((e) {
-                                if (itemBvid != null &&
-                                    itemBvid.isNotEmpty &&
-                                    e.bvid == itemBvid) {
-                                  return true;
-                                }
-                                return targetAid != null && e.aid == targetAid;
-                              });
-                              if (i >= 0) ep = mediaList[i];
-                            }
-                            final cid = asInt(m['cid']);
-                            ep ??= MediaListItemModel(
-                              aid: targetAid,
-                              bvid: itemBvid,
-                              title: t,
-                              cover: cover,
-                              duration: duration,
-                              type: 2,
-                              cid: cid,
-                              pages: cid != null
-                                  ? [media_page.Page(id: cid)]
-                                  : null,
-                            );
-                            try {
-                              ugcIntroCtr.onChangeEpisode(ep);
-                            } catch (_) {}
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 26,
-                                  child: isCurr
-                                      ? Icon(Icons.play_arrow,
-                                          size: 18, color: cs.primary)
-                                      : Text(
-                                          '${index + 1}',
-                                          textAlign: TextAlign.center,
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(color: cs.outline),
-                                        ),
-                                ),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: Stack(
-                                    children: [
-                                      NetworkImgLayer(
-                                        width: 96,
-                                        height: 54,
-                                        src: cover.isEmpty ? null : cover,
+                      return InkWell(
+                        onTap: () {
+                          Get.back();
+                          final targetAid = asInt(m['aid']);
+                          MediaListItemModel? ep;
+                          if (mediaList.isNotEmpty) {
+                            final i = mediaList.indexWhere((e) {
+                              if (itemBvid != null &&
+                                  itemBvid.isNotEmpty &&
+                                  e.bvid == itemBvid) {
+                                return true;
+                              }
+                              return targetAid != null && e.aid == targetAid;
+                            });
+                            if (i >= 0) ep = mediaList[i];
+                          }
+                          final cid = asInt(m['cid']);
+                          ep ??= MediaListItemModel(
+                            aid: targetAid,
+                            bvid: itemBvid,
+                            title: title,
+                            cover: cover,
+                            duration: duration,
+                            type: 2,
+                            cid: cid,
+                            pages: cid != null
+                                ? [media_page.Page(id: cid)]
+                                : null,
+                          );
+                          try {
+                            ugcIntroCtr.onChangeEpisode(ep);
+                          } catch (_) {}
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  NetworkImgLayer(
+                                    src: cover.isEmpty ? null : cover,
+                                    width: 160,
+                                    height: 100,
+                                  ),
+                                  if (duration > 0)
+                                    PBadge(
+                                      text: DurationUtils.formatDuration(
+                                        duration,
                                       ),
-                                      if (duration > 0)
-                                        Positioned(
-                                          right: 3,
-                                          bottom: 3,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 3,
-                                              vertical: 1,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black87,
-                                              borderRadius:
-                                                  BorderRadius.circular(2),
-                                            ),
-                                            child: Text(
-                                              DurationUtils.formatDuration(
-                                                  duration),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    t.isEmpty ? '无标题' : t,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isCurr
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
-                                      color: isCurr ? cs.primary : null,
+                                      right: 6.0,
+                                      bottom: 6.0,
+                                      type: PBadgeType.gray,
                                     ),
-                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title.isEmpty ? '无标题' : title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight:
+                                            isCurr ? FontWeight.bold : null,
+                                        color:
+                                            isCurr ? cs.primary : null,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    if (author.isNotEmpty)
+                                      Text(
+                                        author,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: cs.outline,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       );
