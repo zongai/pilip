@@ -10,6 +10,13 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+int? _asInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse('$v');
+}
+
 /// 本地播放列表管理（支持多个列表）
 class LocalVideoPlaylistPage extends StatefulWidget {
   const LocalVideoPlaylistPage({super.key});
@@ -29,10 +36,14 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
 
   void _refresh() {
     setState(() {
-      _playlists = List<Map>.from(GlobalData().localVideoPlaylists);
+      _playlists = Pref.localVideoPlaylists
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
       if (_playlists.isEmpty) {
         Pref.createLocalVideoPlaylist('默认列表');
-        _playlists = List<Map>.from(GlobalData().localVideoPlaylists);
+        _playlists = Pref.localVideoPlaylists
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
     });
   }
@@ -64,13 +75,23 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
     }
   }
 
-  void _open(Map pl) {
-    Get.to(
-      () => LocalVideoPlaylistDetailPage(
-        playlistId: pl['id'] as int,
-        title: pl['title'] as String? ?? '播放列表',
+  Future<void> _open(Map pl) async {
+    final id = _asInt(pl['id']);
+    if (id == null) {
+      SmartDialog.showToast('列表数据异常');
+      return;
+    }
+    final title = pl['title'] as String? ?? '播放列表';
+    // 使用 Navigator 避免在底栏嵌套场景下 Get.to 灰屏
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LocalVideoPlaylistDetailPage(
+          playlistId: id,
+          title: title,
+        ),
       ),
-    )?.then((_) => _refresh());
+    );
+    if (mounted) _refresh();
   }
 
   @override
@@ -78,7 +99,9 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text('本地播放列表${_playlists.isEmpty ? '' : ' · ${_playlists.length}'}'),
+        title: Text(
+          '本地播放列表${_playlists.isEmpty ? '' : ' · ${_playlists.length}'}',
+        ),
         actions: [
           IconButton(
             tooltip: '新建列表',
@@ -91,11 +114,15 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
         itemCount: _playlists.length,
         itemBuilder: (context, index) {
           final pl = _playlists[index];
-          final items = (pl['items'] is List) ? (pl['items'] as List) : const [];
+          final rawItems = pl['items'];
+          final items = rawItems is List ? rawItems : const [];
           final title = pl['title'] as String? ?? '未命名';
           String? cover;
-          if (items.isNotEmpty && items.first is Map) {
-            cover = (items.first as Map)['cover'] as String?;
+          if (items.isNotEmpty) {
+            final first = items.first;
+            if (first is Map) {
+              cover = first['cover'] as String?;
+            }
           }
           return ListTile(
             leading: NetworkImgLayer(width: 64, height: 40, src: cover),
@@ -103,6 +130,8 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
             subtitle: Text('${items.length} 个视频 · 按标题排序'),
             trailing: PopupMenuButton<String>(
               onSelected: (v) async {
+                final id = _asInt(pl['id']);
+                if (id == null) return;
                 if (v == 'rename') {
                   final ctrl = TextEditingController(text: title);
                   final name = await showDialog<String>(
@@ -111,20 +140,24 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
                       title: const Text('重命名'),
                       content: TextField(controller: ctrl, autofocus: true),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
                         TextButton(
-                          onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('取消'),
+                        ),
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.pop(ctx, ctrl.text.trim()),
                           child: const Text('确定'),
                         ),
                       ],
                     ),
                   );
                   if (name != null && name.isNotEmpty) {
-                    Pref.renameLocalVideoPlaylist(pl['id'] as int, name);
+                    Pref.renameLocalVideoPlaylist(id, name);
                     _refresh();
                   }
                 } else if (v == 'delete') {
-                  Pref.deleteLocalVideoPlaylist(pl['id'] as int);
+                  Pref.deleteLocalVideoPlaylist(id);
                   SmartDialog.showToast('已删除');
                   _refresh();
                 }
@@ -147,7 +180,7 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
   }
 }
 
-/// 单个播放列表详情：多选 / 全选 / 连续播放
+/// 单个播放列表详情
 class LocalVideoPlaylistDetailPage extends StatefulWidget {
   const LocalVideoPlaylistDetailPage({
     super.key,
@@ -165,9 +198,10 @@ class LocalVideoPlaylistDetailPage extends StatefulWidget {
 
 class _LocalVideoPlaylistDetailPageState
     extends State<LocalVideoPlaylistDetailPage> {
-  late List<Map> _list;
+  List<Map> _list = [];
   final Set<String> _selected = {};
   bool _multi = false;
+  String? _error;
 
   @override
   void initState() {
@@ -176,23 +210,34 @@ class _LocalVideoPlaylistDetailPageState
   }
 
   void _refresh() {
-    setState(() {
-      _list = Pref.getLocalVideoPlaylistItems(widget.playlistId);
-    });
+    try {
+      final items = Pref.getLocalVideoPlaylistItems(widget.playlistId);
+      setState(() {
+        _list = items;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _list = [];
+        _error = e.toString();
+      });
+    }
   }
 
   String _key(Map item) => item['bvid'] as String? ?? 'av${item['aid']}';
 
   List<Map> _toArgMaps() {
     return _list
-        .map((e) => {
-              'aid': e['aid'],
-              'bvid': e['bvid'],
-              'cid': e['cid'],
-              'title': e['title'],
-              'cover': e['cover'],
-              'duration': e['duration'] ?? 0,
-            })
+        .map(
+          (e) => {
+            'aid': _asInt(e['aid']),
+            'bvid': e['bvid'],
+            'cid': _asInt(e['cid']),
+            'title': e['title'],
+            'cover': e['cover'],
+            'duration': _asInt(e['duration']) ?? 0,
+          },
+        )
         .toList();
   }
 
@@ -200,8 +245,8 @@ class _LocalVideoPlaylistDetailPageState
     if (_list.isEmpty) return;
     final item = _list[index];
     final bvid = item['bvid'] as String?;
-    int? aid = item['aid'] as int?;
-    int? cid = item['cid'] as int?;
+    int? aid = _asInt(item['aid']);
+    int? cid = _asInt(item['cid']);
     if (cid == null || cid == 0) {
       cid = await SearchHttp.ab2c(aid: aid, bvid: bvid);
     }
@@ -248,7 +293,7 @@ class _LocalVideoPlaylistDetailPageState
       if (item != null) {
         Pref.removeLocalVideoPlaylistItem(
           playlistId: widget.playlistId,
-          aid: item['aid'] as int?,
+          aid: _asInt(item['aid']),
           bvid: item['bvid'] as String?,
         );
       }
@@ -356,11 +401,24 @@ class _LocalVideoPlaylistDetailPageState
     }
   }
 
+  void _back() {
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    } else {
+      Get.back();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _back,
+        ),
         title: Text(
           _multi
               ? '已选 ${_selected.length}'
@@ -413,7 +471,9 @@ class _LocalVideoPlaylistDetailPageState
           ],
         ],
       ),
-      body: _list.isEmpty
+      body: _error != null
+          ? Center(child: Text('加载失败\n$_error', textAlign: TextAlign.center))
+          : _list.isEmpty
           ? Center(
               child: Text(
                 '列表为空\n视频菜单可加入，或点右上角从历史多选加入',
@@ -430,7 +490,7 @@ class _LocalVideoPlaylistDetailPageState
                 final title = item['title'] as String? ?? '';
                 final cover = item['cover'] as String?;
                 final author = item['authorName'] as String? ?? '';
-                final duration = item['duration'] as int? ?? 0;
+                final duration = _asInt(item['duration']) ?? 0;
                 final k = _key(item);
                 final selected = _selected.contains(k);
                 return ListTile(
@@ -449,11 +509,16 @@ class _LocalVideoPlaylistDetailPageState
                           },
                         )
                       : NetworkImgLayer(width: 96, height: 54, src: cover),
-                  title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  title: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(
                     [
                       if (author.isNotEmpty) author,
-                      if (duration > 0) DurationUtils.formatDuration(duration),
+                      if (duration > 0)
+                        DurationUtils.formatDuration(duration),
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -486,7 +551,7 @@ class _LocalVideoPlaylistDetailPageState
                           onPressed: () {
                             Pref.removeLocalVideoPlaylistItem(
                               playlistId: widget.playlistId,
-                              aid: item['aid'] as int?,
+                              aid: _asInt(item['aid']),
                               bvid: item['bvid'] as String?,
                             );
                             _refresh();

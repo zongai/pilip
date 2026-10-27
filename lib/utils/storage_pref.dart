@@ -318,7 +318,7 @@ abstract final class Pref {
   static void renameLocalVideoPlaylist(int id, String title) {
     final pls = List<Map>.from(localVideoPlaylists);
     for (var i = 0; i < pls.length; i++) {
-      if (pls[i]['id'] == id) {
+      if (_plId(pls[i]['id']) == id) {
         pls[i] = {...Map<String, dynamic>.from(pls[i]), 'title': title};
         break;
       }
@@ -327,8 +327,15 @@ abstract final class Pref {
   }
 
   static void deleteLocalVideoPlaylist(int id) {
-    final pls = List<Map>.from(localVideoPlaylists)..removeWhere((e) => e['id'] == id);
+    final pls = List<Map>.from(localVideoPlaylists)..removeWhere((e) => _plId(e['id']) == id);
     localVideoPlaylists = pls;
+  }
+
+  static int? _plId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('$v');
   }
 
   static List<Map> getLocalVideoPlaylistItems(int? playlistId) {
@@ -338,26 +345,43 @@ abstract final class Pref {
     if (playlistId == null) {
       pl = Map<String, dynamic>.from(pls.first);
     } else {
-      pl = Map<String, dynamic>.from(
-        pls.firstWhere((e) => e['id'] == playlistId, orElse: () => pls.first),
-      );
+      Map? found;
+      for (final e in pls) {
+        if (_plId(e['id']) == playlistId) {
+          found = Map<String, dynamic>.from(e);
+          break;
+        }
+      }
+      pl = found ?? Map<String, dynamic>.from(pls.first);
     }
     final items = pl['items'];
     if (items is! List) return <Map>[];
-    return items.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return items
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   static void _setPlaylistItems(int playlistId, List<Map> items) {
     _sortItems(items);
     final pls = List<Map>.from(localVideoPlaylists);
+    var matched = false;
     for (var i = 0; i < pls.length; i++) {
-      if (pls[i]['id'] == playlistId) {
+      if (_plId(pls[i]['id']) == playlistId) {
         pls[i] = {
           ...Map<String, dynamic>.from(pls[i]),
           'items': items,
         };
+        matched = true;
         break;
       }
+    }
+    if (!matched && pls.isNotEmpty) {
+      // 找不到 id 时写入第一个列表，避免“添加无效果”
+      pls[0] = {
+        ...Map<String, dynamic>.from(pls[0]),
+        'items': items,
+      };
     }
     localVideoPlaylists = pls;
   }
@@ -381,15 +405,20 @@ abstract final class Pref {
     int? duration,
   }) {
     if ((bvid == null || bvid.isEmpty) && aid == null) return;
-    final pl = playlistId == null
-        ? _ensureDefaultPlaylist()
-        : Map<String, dynamic>.from(
-            localVideoPlaylists.firstWhere(
-              (e) => e['id'] == playlistId,
-              orElse: () => _ensureDefaultPlaylist(),
-            ),
-          );
-    final id = pl['id'] as int;
+    final Map pl;
+    if (playlistId == null) {
+      pl = _ensureDefaultPlaylist();
+    } else {
+      Map? found;
+      for (final e in localVideoPlaylists) {
+        if (_plId(e['id']) == playlistId) {
+          found = Map<String, dynamic>.from(e);
+          break;
+        }
+      }
+      pl = found ?? _ensureDefaultPlaylist();
+    }
+    final id = _plId(pl['id']) ?? playlistId ?? DateTime.now().millisecondsSinceEpoch;
     final list = getLocalVideoPlaylistItems(id);
     final key = bvid ?? 'av$aid';
     list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
@@ -407,15 +436,20 @@ abstract final class Pref {
   }
 
   static void addLocalVideoPlaylistItems(List<Map> items, {int? playlistId}) {
-    final pl = playlistId == null
-        ? _ensureDefaultPlaylist()
-        : Map<String, dynamic>.from(
-            localVideoPlaylists.firstWhere(
-              (e) => e['id'] == playlistId,
-              orElse: () => _ensureDefaultPlaylist(),
-            ),
-          );
-    final id = pl['id'] as int;
+    final Map pl;
+    if (playlistId == null) {
+      pl = _ensureDefaultPlaylist();
+    } else {
+      Map? found;
+      for (final e in localVideoPlaylists) {
+        if (_plId(e['id']) == playlistId) {
+          found = Map<String, dynamic>.from(e);
+          break;
+        }
+      }
+      pl = found ?? _ensureDefaultPlaylist();
+    }
+    final id = _plId(pl['id']) ?? playlistId ?? DateTime.now().millisecondsSinceEpoch;
     final list = getLocalVideoPlaylistItems(id);
     for (final e in items) {
       final aid = e['aid'] as int?;
