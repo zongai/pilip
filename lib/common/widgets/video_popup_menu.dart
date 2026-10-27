@@ -67,9 +67,7 @@ class VideoPopupMenu extends StatelessWidget {
                     () {
                       final int? aid = videoItem is BaseVideoItemModel
                           ? (videoItem as BaseVideoItemModel).aid
-                          : (videoItem.bvid != null
-                              ? IdUtils.bv2av(videoItem.bvid!)
-                              : null);
+                          : null;
                       Pref.addLocalVideoPlaylistItem(
                         aid: aid,
                         bvid: videoItem.bvid,
