@@ -248,6 +248,101 @@ abstract final class Pref {
     GlobalData().localPlaylistList = list;
   }
 
+  /// 本地视频播放列表（按标题排序）[{aid,bvid,cid,title,cover,authorName,authorMid,duration}, ...]
+  static List<Map> get localVideoPlaylist {
+    final raw = _localCache.get(LocalCacheKey.localVideoPlaylist, defaultValue: <dynamic>[]);
+    if (raw is! List) return <Map>[];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  static set localVideoPlaylist(List<Map> list) =>
+      _localCache.put(LocalCacheKey.localVideoPlaylist, list);
+
+  static void _syncLocalVideoPlaylist(List<Map> list) {
+    list.sort((a, b) {
+      final ta = (a['title'] as String? ?? '').toLowerCase();
+      final tb = (b['title'] as String? ?? '').toLowerCase();
+      return ta.compareTo(tb);
+    });
+    localVideoPlaylist = list;
+    GlobalData().localVideoPlaylistList = list;
+  }
+
+  static bool isInLocalVideoPlaylist({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return false;
+    return GlobalData().localVideoPlaylistList.any(
+      (e) => (e['bvid'] ?? 'av${e['aid']}') == key,
+    );
+  }
+
+  static void addLocalVideoPlaylistItem({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
+  }) {
+    if ((bvid == null || bvid.isEmpty) && aid == null) return;
+    final list = List<Map>.from(localVideoPlaylist);
+    final key = bvid ?? 'av$aid';
+    list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    list.add({
+      'aid': aid,
+      'bvid': bvid,
+      'cid': cid,
+      'title': title ?? '',
+      'cover': cover ?? '',
+      'authorName': authorName ?? '',
+      'authorMid': authorMid,
+      'duration': duration ?? 0,
+    });
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void addLocalVideoPlaylistItems(List<Map> items) {
+    final list = List<Map>.from(localVideoPlaylist);
+    for (final e in items) {
+      final aid = e['aid'] as int?;
+      final bvid = e['bvid'] as String?;
+      if ((bvid == null || bvid.isEmpty) && aid == null) continue;
+      final key = bvid ?? 'av$aid';
+      list.removeWhere((x) => (x['bvid'] ?? 'av${x['aid']}') == key);
+      list.add({
+        'aid': aid,
+        'bvid': bvid,
+        'cid': e['cid'],
+        'title': e['title'] ?? '',
+        'cover': e['cover'] ?? '',
+        'authorName': e['authorName'] ?? '',
+        'authorMid': e['authorMid'],
+        'duration': e['duration'] ?? 0,
+      });
+    }
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void removeLocalVideoPlaylistItem({int? aid, String? bvid}) {
+    final key = bvid ?? (aid != null ? 'av$aid' : null);
+    if (key == null) return;
+    final list = List<Map>.from(localVideoPlaylist)
+      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    _syncLocalVideoPlaylist(list);
+  }
+
+  static void clearLocalVideoPlaylist() {
+    _syncLocalVideoPlaylist([]);
+  }
+
+  static void replaceLocalVideoPlaylist(List<Map> list) {
+    _syncLocalVideoPlaylist(List<Map>.from(list));
+  }
+
+
+
 
 
   /// 本地观看历史 [{aid,bvid,cid,title,cover,authorName,authorMid,progress,duration,viewAt}, ...]

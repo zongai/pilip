@@ -420,9 +420,16 @@ class VideoDetailController extends GetxController
     if (isFileSource) {
       initFileSource(args['entry']);
     } else if (isPlayAll) {
-      watchLaterTitle = args['favTitle'];
+      watchLaterTitle = args['favTitle'] ?? '播放列表';
       _mediaDesc = args['desc'];
-      getMediaList();
+      final local = args['localMediaList'];
+      if (local is List && local.isNotEmpty) {
+        mediaList.assignAll(
+          local.whereType<MediaListItemModel>().toList(),
+        );
+      } else {
+        getMediaList();
+      }
     }
 
     tabCtr = TabController(

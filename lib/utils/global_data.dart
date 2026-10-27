@@ -15,6 +15,7 @@ class GlobalData {
 
   List<Map> localFollowList = Pref.localFollows;
   List<Map> localPlaylistList = Pref.localPlaylists;
+  List<Map> localVideoPlaylistList = Pref.localVideoPlaylist;
   Set<int> localPlaylistIds = {
     for (final e in Pref.localPlaylists)
       if (e['mediaId'] is int) e['mediaId'] as int

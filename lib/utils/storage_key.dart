@@ -250,6 +250,7 @@ abstract final class LocalCacheKey {
       localFollows = 'localFollows',
       localSeasons = 'localSeasons',
       localPlaylists = 'localPlaylists',
+      localVideoPlaylist = 'localVideoPlaylist',
       localHistory = 'localHistory',
       localLater = 'localLater',
       danmakuFilterRules = 'danmakuFilterRules',

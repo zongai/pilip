@@ -74,6 +74,11 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
         }
       },
     ),
+    (
+      icon: Icons.playlist_play_outlined,
+      title: '本地播放列表',
+      onTap: () => Get.toNamed('/localVideoPlaylistPage'),
+    ),
   ];
 
   @override
