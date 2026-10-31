@@ -624,7 +624,7 @@ class _EpisodePanelState extends State<EpisodePanel>
                 final ugc = detail?.ugcSeason;
                 seasonTitle = ugc?.title;
                 cover = ugc?.cover ?? cover;
-                mediaCount = ugc?.epCount ?? ugc?.sections
+                mediaCount = ugc?.sections
                     ?.fold<int>(0, (s, e) => s + (e.episodes?.length ?? 0));
                 mid = detail?.owner?.mid;
                 upperName = detail?.owner?.name;
