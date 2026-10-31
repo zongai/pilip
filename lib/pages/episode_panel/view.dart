@@ -172,24 +172,31 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
     _isReversed = List.filled(widget.list.length, false);
 
-    if (widget.type == EpisodeType.season && Accounts.main.isLogin) {
-      final favState =
-          widget.ugcIntroController?.seasonFavState[widget.seasonId];
-      if (favState != null) {
-        _favState = Success(favState).obs;
-      } else {
-        _favState = LoadingState<bool>.loading().obs;
-        VideoHttp.videoRelation(bvid: widget.bvid).then(
-          (result) {
-            if (!mounted) return;
-            if (result case Success(:final response)) {
-              final seasonFav = response.seasonFav ?? false;
-              _favState!.value = Success(seasonFav);
-              widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                  seasonFav;
-            }
-          },
-        );
+    if (widget.type == EpisodeType.season && widget.seasonId != null) {
+      // 本地功能开启时：始终显示订阅按钮，状态走本地合集
+      if (Pref.enableLocalFeatures) {
+        final localFav = Pref.isLocalSeasonFav(widget.seasonId);
+        _favState = Success(localFav).obs;
+        widget.ugcIntroController?.seasonFavState[widget.seasonId] = localFav;
+      } else if (Accounts.main.isLogin) {
+        final favState =
+            widget.ugcIntroController?.seasonFavState[widget.seasonId];
+        if (favState != null) {
+          _favState = Success(favState).obs;
+        } else {
+          _favState = LoadingState<bool>.loading().obs;
+          VideoHttp.videoRelation(bvid: widget.bvid).then(
+            (result) {
+              if (!mounted) return;
+              if (result case Success(:final response)) {
+                final seasonFav = response.seasonFav ?? false;
+                _favState!.value = Success(seasonFav);
+                widget.ugcIntroController?.seasonFavState[widget.seasonId] =
+                    seasonFav;
+              }
+            },
+          );
+        }
       }
     }
   }
@@ -602,6 +609,52 @@ class _EpisodePanelState extends State<EpisodePanel>
             ? const Icon(Icons.notifications_off_outlined)
             : const Icon(Icons.notifications_active_outlined),
         onPressed: () async {
+          if (Pref.enableLocalFeatures) {
+            if (response) {
+              Pref.removeLocalSeason(widget.seasonId);
+              SmartDialog.showToast('已取消本地合集收藏');
+            } else {
+              String? seasonTitle;
+              String? cover = widget.cover;
+              int? mediaCount;
+              int? mid;
+              String? upperName;
+              try {
+                final detail = widget.ugcIntroController?.videoDetail.value;
+                final ugc = detail?.ugcSeason;
+                seasonTitle = ugc?.title;
+                cover = ugc?.cover ?? cover;
+                mediaCount = ugc?.epCount ?? ugc?.sections
+                    ?.fold<int>(0, (s, e) => s + (e.episodes?.length ?? 0));
+                mid = detail?.owner?.mid;
+                upperName = detail?.owner?.name;
+              } catch (_) {}
+              if (seasonTitle == null || seasonTitle!.isEmpty) {
+                try {
+                  final section =
+                      widget.list.isNotEmpty ? widget.list.first : null;
+                  seasonTitle = section?.title as String?;
+                  final eps = section?.episodes as List?;
+                  mediaCount ??= eps?.length;
+                } catch (_) {}
+              }
+              Pref.addLocalSeason(
+                seasonId: widget.seasonId,
+                title: (seasonTitle != null && seasonTitle!.isNotEmpty)
+                    ? seasonTitle
+                    : '合集 ${widget.seasonId}',
+                cover: cover,
+                mediaCount: mediaCount,
+                mid: mid,
+                upperName: upperName,
+              );
+              SmartDialog.showToast('已加入本地合集收藏');
+            }
+            final next = !response;
+            _favState!.value = Success(next);
+            widget.ugcIntroController?.seasonFavState[widget.seasonId] = next;
+            return;
+          }
           final res = await FavHttp.seasonFav(
             isFav: response,
             seasonId: widget.seasonId,
