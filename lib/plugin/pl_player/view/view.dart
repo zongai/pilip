@@ -578,12 +578,19 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             // TODO
             return;
           }
-          // part -> playAll -> season(pgc)
-          if (isPlayAll && !isPart) {
-            widget.showEpisodes?.call();
+          // 优先官方合集/分P/番剧选集；仅在无官方列表时才打开本地/稍后再看播放列表
+          final bvid = plPlayerController.bvid;
+          if (isSeason) {
+            widget.showEpisodes?.call(
+              videoDetailController.seasonIndex.value,
+              videoDetail.ugcSeason!,
+              null,
+              bvid,
+              IdUtils.bv2av(bvid),
+              videoDetailController.seasonCid,
+            );
             return;
           }
-          final bvid = plPlayerController.bvid;
           List<ugc.BaseEpisodeItem>? episodes;
           if (isPart) {
             episodes = videoDetail.pages!;
@@ -591,16 +598,21 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             episodes =
                 (introController as PgcIntroController).pgcItem.episodes!;
           }
-          widget.showEpisodes?.call(
-            isSeason ? videoDetailController.seasonIndex.value : null,
-            isSeason ? videoDetail.ugcSeason! : null,
-            isSeason ? null : episodes,
-            bvid,
-            IdUtils.bv2av(bvid),
-            isSeason
-                ? videoDetailController.seasonCid
-                : plPlayerController.cid!,
-          );
+          if (episodes != null) {
+            widget.showEpisodes?.call(
+              null,
+              null,
+              episodes,
+              bvid,
+              IdUtils.bv2av(bvid),
+              plPlayerController.cid!,
+            );
+            return;
+          }
+          // 无官方选集时（纯本地列表 / 稍后再看）才打开播放列表面板
+          if (isPlayAll) {
+            widget.showEpisodes?.call();
+          }
         },
       ),
 
