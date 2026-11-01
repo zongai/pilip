@@ -7,6 +7,8 @@ import 'package:PiliPlus/models_new/video/video_detail/section.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/pages/video/introduction/ugc/controller.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -33,6 +35,7 @@ class _SeasonPanelState extends State<SeasonPanel> {
   late VideoDetailController _videoDetailController;
   StreamSubscription? _listener;
   List<EpisodeItem> episodes = <EpisodeItem>[];
+  late final RxBool _seasonFav;
 
   UgcIntroController get ugcIntroController => widget.ugcIntroController;
   VideoDetailData get videoDetail =>
@@ -70,6 +73,11 @@ class _SeasonPanelState extends State<SeasonPanel> {
 
     /// 取对应 season_id 的 episodes
     _updateIndex();
+    final sid = videoDetail.ugcSeason?.id;
+    final fav = sid != null &&
+        (widget.ugcIntroController.seasonFavState[sid] ??
+            Pref.isLocalSeasonFav(sid));
+    _seasonFav = fav.obs;
     _listener = _videoDetailController.cid.listen((int cid) {
       if (_videoDetailController.seasonCid != cid) {
         bool isPart =
@@ -128,7 +136,54 @@ class _SeasonPanelState extends State<SeasonPanel> {
                     overflow: .ellipsis,
                   ),
                 ),
-                const SizedBox(width: 15),
+                if (Pref.enableLocalFeatures)
+                  Obx(() {
+                    final fav = _seasonFav.value;
+                    return IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      tooltip: fav ? '取消收藏' : '收藏合集',
+                      icon: Icon(
+                        fav ? Icons.star_rounded : Icons.star_border_rounded,
+                        size: 20,
+                        color: fav
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: () {
+                        final season = videoDetail.ugcSeason;
+                        if (season?.id == null) {
+                          SmartDialog.showToast('无法获取合集 ID');
+                          return;
+                        }
+                        final id = season!.id!;
+                        if (_seasonFav.value) {
+                          Pref.removeLocalSeason(id);
+                          widget.ugcIntroController.seasonFavState[id] = false;
+                          _seasonFav.value = false;
+                          SmartDialog.showToast('已取消本地合集收藏');
+                        } else {
+                          final mediaCount = season.sections?.fold<int>(
+                                0,
+                                (s, e) => s + (e.episodes?.length ?? 0),
+                              );
+                          Pref.addLocalSeason(
+                            seasonId: id,
+                            title: season.title ?? '合集 $id',
+                            cover: season.cover,
+                            mediaCount: mediaCount,
+                            mid: videoDetail.owner?.mid,
+                            upperName: videoDetail.owner?.name,
+                          );
+                          widget.ugcIntroController.seasonFavState[id] = true;
+                          _seasonFav.value = true;
+                          SmartDialog.showToast('已加入本地合集收藏');
+                        }
+                      },
+                    );
+                  }),
+                const SizedBox(width: 8),
                 Image.asset(
                   Assets.livingStatic,
                   color: theme.colorScheme.primary,

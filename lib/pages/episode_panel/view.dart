@@ -718,6 +718,13 @@ class _EpisodePanelState extends State<EpisodePanel>
             style: theme.textTheme.titleMedium,
           ),
         if (_favState != null) Obx(() => _buildFavBtn(_favState!.value)),
+        if (_favState != null)
+          Text(
+            '收藏',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
         iconButton(
           iconSize: 22,
           tooltip: '跳至顶部',
