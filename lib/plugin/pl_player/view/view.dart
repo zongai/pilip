@@ -609,8 +609,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             );
             return;
           }
-          // 无官方选集时（纯本地列表 / 稍后再看）才打开播放列表面板
-          if (isPlayAll) {
+          // 仅当：当前视频来自本地播放列表，且没有官方合集/分P/番剧时，才打开本地播放列表
+          if (videoDetailController.isLocalMediaList) {
             widget.showEpisodes?.call();
           }
         },
