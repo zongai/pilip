@@ -115,7 +115,6 @@ index 000000000..2823c2188
 +  }
 +}
 diff --git a/lib/pages/login/geetest/geetest_webview_dialog.dart b/lib/pages/login/geetest/geetest_webview_dialog.dart
-index 339f0fcda..41d953998 100644
 --- a/lib/pages/login/geetest/geetest_webview_dialog.dart
 +++ b/lib/pages/login/geetest/geetest_webview_dialog.dart
 @@ -7,6 +7,7 @@ import 'package:PiliPlus/plugin/linux_webview.dart';
@@ -131,11 +130,10 @@ index 339f0fcda..41d953998 100644
  
    static Future<Map<String, dynamic>?> geetest(String gt, String challenge) {
 +    return GeetestPlugin.geetest(gt, challenge);
-     return showDialog<Map<String, dynamic>>(
-       context: Get.context!,
-       builder: (context) => GeetestWebviewDialog(gt, challenge),
+     final ctx = Get.context;
+     if (ctx == null || !ctx.mounted) {
+       return Future.value(null);
 diff --git a/pubspec.yaml b/pubspec.yaml
-index 1ec95f9f1..e29e474e0 100644
 --- a/pubspec.yaml
 +++ b/pubspec.yaml
 @@ -34,6 +34,7 @@ dependencies:
