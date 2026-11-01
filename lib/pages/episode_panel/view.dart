@@ -110,6 +110,7 @@ class _EpisodePanelState extends State<EpisodePanel>
 
   // fav
   Rx<LoadingState<bool>>? _favState;
+  int? _resolvedSeasonId;
 
   void listener() {
     _currentTabIndex.value = _tabController.index;
@@ -172,15 +173,18 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
     _isReversed = List.filled(widget.list.length, false);
 
-    if (widget.type == EpisodeType.season && widget.seasonId != null) {
-      // 本地功能开启时：始终显示订阅按钮，状态走本地合集
+    // 合集收藏：面板为合集，或分P/其它但视频属于 ugcSeason 时也显示
+    final resolvedSeasonId = widget.seasonId ??
+        widget.ugcIntroController?.videoDetail.value.ugcSeason?.id;
+    if (resolvedSeasonId != null) {
+      _resolvedSeasonId = resolvedSeasonId;
       if (Pref.enableLocalFeatures) {
-        final localFav = Pref.isLocalSeasonFav(widget.seasonId);
+        final localFav = Pref.isLocalSeasonFav(resolvedSeasonId);
         _favState = Success(localFav).obs;
-        widget.ugcIntroController?.seasonFavState[widget.seasonId] = localFav;
+        widget.ugcIntroController?.seasonFavState[resolvedSeasonId] = localFav;
       } else if (Accounts.main.isLogin) {
         final favState =
-            widget.ugcIntroController?.seasonFavState[widget.seasonId];
+            widget.ugcIntroController?.seasonFavState[resolvedSeasonId];
         if (favState != null) {
           _favState = Success(favState).obs;
         } else {
@@ -191,7 +195,7 @@ class _EpisodePanelState extends State<EpisodePanel>
               if (result case Success(:final response)) {
                 final seasonFav = response.seasonFav ?? false;
                 _favState!.value = Success(seasonFav);
-                widget.ugcIntroController?.seasonFavState[widget.seasonId] =
+                widget.ugcIntroController?.seasonFavState[resolvedSeasonId] =
                     seasonFav;
               }
             },
@@ -601,17 +605,22 @@ class _EpisodePanelState extends State<EpisodePanel>
   }
 
   Widget _buildFavBtn(LoadingState<bool> loadingState) {
+    final seasonId = _resolvedSeasonId ?? widget.seasonId;
     return switch (loadingState) {
       Success(:final response) => iconButton(
         iconSize: 22,
-        tooltip: response ? '取消订阅' : '订阅',
+        tooltip: response ? '取消收藏' : '收藏合集',
         icon: response
-            ? const Icon(Icons.notifications_off_outlined)
-            : const Icon(Icons.notifications_active_outlined),
+            ? const Icon(Icons.star_rounded)
+            : const Icon(Icons.star_border_rounded),
         onPressed: () async {
+          if (seasonId == null) {
+            SmartDialog.showToast('无法获取合集 ID');
+            return;
+          }
           if (Pref.enableLocalFeatures) {
             if (response) {
-              Pref.removeLocalSeason(widget.seasonId);
+              Pref.removeLocalSeason(seasonId);
               SmartDialog.showToast('已取消本地合集收藏');
             } else {
               String? seasonTitle;
@@ -639,10 +648,10 @@ class _EpisodePanelState extends State<EpisodePanel>
                 } catch (_) {}
               }
               Pref.addLocalSeason(
-                seasonId: widget.seasonId,
+                seasonId: seasonId,
                 title: (seasonTitle != null && seasonTitle!.isNotEmpty)
                     ? seasonTitle
-                    : '合集 ${widget.seasonId}',
+                    : '合集 $seasonId',
                 cover: cover,
                 mediaCount: mediaCount,
                 mid: mid,
@@ -652,18 +661,17 @@ class _EpisodePanelState extends State<EpisodePanel>
             }
             final next = !response;
             _favState!.value = Success(next);
-            widget.ugcIntroController?.seasonFavState[widget.seasonId] = next;
+            widget.ugcIntroController?.seasonFavState[seasonId] = next;
             return;
           }
           final res = await FavHttp.seasonFav(
             isFav: response,
-            seasonId: widget.seasonId,
+            seasonId: seasonId,
           );
           if (res.isSuccess) {
-            SmartDialog.showToast('${response ? '取消' : ''}订阅成功');
+            SmartDialog.showToast('${response ? '取消' : ''}收藏成功');
             _favState!.value = Success(!response);
-            widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                !response;
+            widget.ugcIntroController?.seasonFavState[seasonId] = !response;
           } else {
             res.toast();
           }
