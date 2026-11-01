@@ -88,69 +88,94 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
       );
     }
 
+    final webView = InAppWebView(
+      webViewEnvironment: webViewEnvironment,
+      initialSettings: InAppWebViewSettings(
+        clearCache: true,
+        javaScriptEnabled: true,
+        forceDark: ForceDark.AUTO,
+        useHybridComposition: true,
+        algorithmicDarkeningAllowed: true,
+        useShouldOverrideUrlLoading: true,
+        userAgent: BrowserUa.mob,
+        mixedContentMode: .MIXED_CONTENT_ALWAYS_ALLOW,
+
+        incognito: true,
+        allowFileAccess: false,
+        allowsLinkPreview: false,
+        allowContentAccess: false,
+        useOnDownloadStart: false,
+        geolocationEnabled: false,
+        thirdPartyCookiesEnabled: false,
+        enterpriseAuthenticationAppLinkPolicyEnabled: false,
+        saveFormData: false,
+        safeBrowsingEnabled: false,
+        isFraudulentWebsiteWarningEnabled: false,
+        domStorageEnabled: false,
+        databaseEnabled: false,
+        cacheEnabled: false,
+        cacheMode: .LOAD_NO_CACHE,
+
+        horizontalScrollBarEnabled: false,
+        verticalScrollBarEnabled: false,
+        overScrollMode: .NEVER,
+
+        pageZoom: Platform.isIOS ? 3 : 1,
+      ),
+      initialData: InAppWebViewInitialData(data: html),
+      onWebViewCreated: (ctr) {
+        ctr
+          ..addJavaScriptHandler(
+            handlerName: 'success',
+            callback: (args) {
+              if (args.isNotEmpty) {
+                if (args[0] case Map<String, dynamic> data) {
+                  Get.back(result: data);
+                  return;
+                }
+              }
+              debugPrint('geetest invalid result: $args');
+            },
+          )
+          ..addJavaScriptHandler(
+            handlerName: 'error',
+            callback: (args) {
+              debugPrint('geetest error: $args');
+            },
+          )
+          ..addJavaScriptHandler(
+            handlerName: 'close',
+            callback: (args) => Get.back(),
+          );
+      },
+    );
+
+    // 桌面端（Windows/macOS）需要固定尺寸，否则弹窗内容高度为 0，验证界面不可见
+    if (Platform.isWindows || Platform.isMacOS) {
+      return AlertDialog(
+        title: Row(
+          children: [
+            const Expanded(child: Text('安全验证')),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: Get.back,
+              tooltip: '关闭',
+            ),
+          ],
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        content: SizedBox(
+          width: 360,
+          height: 420,
+          child: webView,
+        ),
+      );
+    }
+
+    // 移动端保持全屏叠加
     return Stack(
       children: [
-        InAppWebView(
-          webViewEnvironment: webViewEnvironment,
-          initialSettings: InAppWebViewSettings(
-            clearCache: true,
-            javaScriptEnabled: true,
-            forceDark: ForceDark.AUTO,
-            useHybridComposition: true,
-            algorithmicDarkeningAllowed: true,
-            useShouldOverrideUrlLoading: true,
-            userAgent: BrowserUa.mob,
-            mixedContentMode: .MIXED_CONTENT_ALWAYS_ALLOW,
-
-            incognito: true,
-            allowFileAccess: false,
-            allowsLinkPreview: false,
-            allowContentAccess: false,
-            useOnDownloadStart: false,
-            geolocationEnabled: false,
-            thirdPartyCookiesEnabled: false,
-            enterpriseAuthenticationAppLinkPolicyEnabled: false,
-            saveFormData: false,
-            safeBrowsingEnabled: false,
-            isFraudulentWebsiteWarningEnabled: false,
-            domStorageEnabled: false,
-            databaseEnabled: false,
-            cacheEnabled: false,
-            cacheMode: .LOAD_NO_CACHE,
-
-            horizontalScrollBarEnabled: false,
-            verticalScrollBarEnabled: false,
-            overScrollMode: .NEVER,
-
-            pageZoom: Platform.isIOS ? 3 : 1,
-          ),
-          initialData: InAppWebViewInitialData(data: html),
-          onWebViewCreated: (ctr) {
-            ctr
-              ..addJavaScriptHandler(
-                handlerName: 'success',
-                callback: (args) {
-                  if (args.isNotEmpty) {
-                    if (args[0] case Map<String, dynamic> data) {
-                      Get.back(result: data);
-                      return;
-                    }
-                  }
-                  debugPrint('geetest invalid result: $args');
-                },
-              )
-              ..addJavaScriptHandler(
-                handlerName: 'error',
-                callback: (args) {
-                  debugPrint('geetest error: $args');
-                },
-              )
-              ..addJavaScriptHandler(
-                handlerName: 'close',
-                callback: (args) => Get.back(),
-              );
-          },
-        ),
+        webView,
         Positioned(
           left: 8,
           top: 8,

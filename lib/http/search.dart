@@ -1,4 +1,5 @@
 import 'package:PiliPlus/http/api.dart';
+import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/search/search_type.dart';
@@ -86,16 +87,26 @@ abstract final class SearchHttp {
           'origin': 'https://search.bilibili.com',
           'referer':
               'https://search.bilibili.com/${searchType.name}?keyword=${Uri.encodeFull(keyword)}',
+          'user-agent': BrowserUa.pc,
         },
       ),
     );
     final resData = res.data;
     if (resData is Map) {
+      // 响应头中的 voucher（部分风控场景）
+      String? headerVoucher;
+      try {
+        final raw = res.headers.value('x-bili-gaia-vvoucher');
+        if (raw != null && raw.isNotEmpty) headerVoucher = raw;
+      } catch (_) {}
+
       if (resData['code'] == 0) {
-        final Map<String, dynamic> dataData = resData['data'];
-        final vVoucher = dataData['v_voucher'];
-        if (vVoucher != null) {
-          RequestUtils.validate(vVoucher, onSuccess);
+        final dataRaw = resData['data'];
+        final Map<String, dynamic> dataData =
+            dataRaw is Map<String, dynamic> ? dataRaw : <String, dynamic>{};
+        final vVoucher = dataData['v_voucher'] ?? headerVoucher;
+        if (vVoucher != null && vVoucher.toString().isNotEmpty) {
+          RequestUtils.validate(vVoucher.toString(), onSuccess);
           return const Error('触发风控');
         }
         try {
@@ -113,7 +124,18 @@ abstract final class SearchHttp {
           return Error('$e\n\n$s');
         }
       } else {
-        return Error(resData['message'], code: resData['code']);
+        // code -352 等风控：从 data / 响应头取 v_voucher 并弹验证
+        final dataRaw = resData['data'];
+        String? vVoucher;
+        if (dataRaw is Map) {
+          vVoucher = dataRaw['v_voucher']?.toString();
+        }
+        vVoucher ??= headerVoucher;
+        if (vVoucher != null && vVoucher.isNotEmpty) {
+          RequestUtils.validate(vVoucher, onSuccess);
+          return const Error('触发风控');
+        }
+        return Error(resData['message']?.toString() ?? '请求失败', code: resData['code']);
       }
     } else {
       return const Error('服务器错误');

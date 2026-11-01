@@ -541,6 +541,7 @@ abstract final class RequestUtils {
     String vVoucher,
     ValueChanged<String> onSuccess,
   ) async {
+    SmartDialog.showToast('需要完成安全验证…');
     final res = await ValidateHttp.gaiaVgateRegister(vVoucher);
     if (!res.isSuccess) {
       res.toast();
@@ -549,7 +550,7 @@ abstract final class RequestUtils {
 
     final resData = res.data;
     if (resData == null) {
-      SmartDialog.showToast("null data");
+      SmartDialog.showToast('验证注册失败：无数据');
       return;
     }
 
@@ -567,7 +568,7 @@ abstract final class RequestUtils {
     }
 
     if (!isGeeArgumentValid()) {
-      SmartDialog.showToast("参数为空");
+      SmartDialog.showToast('验证参数为空，请稍后重试');
       return;
     }
 
@@ -585,11 +586,19 @@ abstract final class RequestUtils {
             onSuccess(griskId);
           }
         } else {
-          SmartDialog.showToast('invalid');
+          SmartDialog.showToast('验证未通过');
         }
       } else {
         res.toast();
       }
+    }
+
+    // 等当前帧结束再弹窗，避免与「触发风控」错误页抢 context
+    await Future<void>.delayed(Duration.zero);
+    final ctx = Get.context;
+    if (ctx == null || !ctx.mounted) {
+      SmartDialog.showToast('无法打开验证窗口');
+      return;
     }
 
     final json = await GeetestWebviewDialog.geetest(gt!, challenge!);
