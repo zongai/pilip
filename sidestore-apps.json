@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "file": "PiliPlus_ios_2.1.6+5609.ipa",
+      "file": "PiliPlus_ios_2.1.6+5611.ipa",
       "bundleIdentifier": "com.example.piliplus",
       "name": "PiliPlus",
       "developerName": "zongai",
@@ -9,10 +9,10 @@
       "localizedDescription": "使用 Flutter 开发的 BiliBili 第三方客户端。支持本地关注、黑名单、播单、历史与稍后再看（无需登录）。",
       "iconURL": "https://raw.githubusercontent.com/zongai/zoo/refs/heads/main/pili.png",
       "tintColor": "FB7299",
-      "version": "2.1.6+5609",
-      "versionDate": "2026-11-01",
+      "version": "2.1.6+5611",
+      "versionDate": "2026-11-02",
       "category": "photo-video",
-      "versionDescription": "修复安全验证弹窗空白（极验 WebView 固定高度/domStorage/baseUrl）",
+      "versionDescription": "iOS 验证改回 WebView，避免原生极验 error_34 captcha not found",
       "minOSVersion": "14.0",
       "banner": "https://raw.githubusercontent.com/zongai/zoo/refs/heads/main/banner.png"
     }
