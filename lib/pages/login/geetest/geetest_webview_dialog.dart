@@ -31,60 +31,136 @@ class GeetestWebviewDialog extends StatefulWidget {
 }
 
 class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
-  static const _geetestJsUri =
+  // 官方 gt 初始化脚本（兼容性优于 fullpage.0.0.0）
+  static const _gtJsUri = 'https://static.geetest.com/static/js/gt.0.4.9.js';
+  // 备用
+  static const _fullpageJsUri =
       'https://static.geetest.com/static/js/fullpage.0.0.0.js';
   static const _geetestConfigUri = 'https://api.geetest.com/gettype.php';
 
-  // 使用 bilibili 域名作为 base，避免 about:blank 下脚本/接口被拦
-  static final WebUri _baseUri = WebUri('https://www.bilibili.com/');
+  static final WebUri _baseUri = WebUri('https://passport.bilibili.com/');
 
   String? _statusText;
 
+  /// 桌面端用 PC UA，移动端用 mob；错误 UA 会导致极验拒绝
+  static String get _userAgent =>
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux
+          ? BrowserUa.pc
+          : BrowserUa.mob;
+
   static String _buildHtml(String gt, String challenge) {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final js =
-        'var C,S,T,t;'
-        'T=()=>{if(C&&S&&!t){try{'
-        'document.getElementById("E").style.display="none";'
-        't=Geetest(C).onSuccess(()=>R("success",t.getValidate())).onError(o=>R("error",o)).onClose(o=>R("close",o));'
-        't.onReady(()=>t.verify())'
-        '}catch(e){document.getElementById("E").style.display="flex";'
-        'document.getElementById("E").textContent="验证初始化失败: "+e;R("error",String(e))}}};'
-        'geetest_$ts=(d)=>{'
-        'if(!d||d.status!="success"){'
-        'document.getElementById("E").style.display="flex";'
-        'document.getElementById("E").textContent="验证配置失败";'
-        'R("error",JSON.stringify(d));return};'
-        'C=Object.assign({gt:"$gt",challenge:"$challenge",offline:false,new_captcha:true,product:"bind",width:"100%",https:true,protocol:"https://"},d.data);T()'
-        '};'
-        'G=()=>{S=1;T()};'
-        'E=()=>{var e=document.getElementById("E");e.style.display="flex";e.textContent="验证码加载失败，请检查网络后重试";R("error","geetest script load failed")}';
+    // 桌面 WebView2 上 bind 弹层常不可见，改用 float 内嵌展示
+    final product = (Platform.isWindows || Platform.isMacOS) ? 'float' : 'bind';
 
-    return '<!DOCTYPE html><html><head>'
-        '<meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">'
-        '</head>'
-        '<style>'
-        'html,body{margin:0;padding:0;width:100%;height:100%;background:transparent}'
-        '#E{position:fixed;inset:0;display:none;align-items:center;justify-content:center;'
-        'color:#c62828;font-size:14px;padding:16px;text-align:center;background:rgba(255,255,255,0.92)}'
-        '</style>'
-        '<body><div id="E">正在加载验证…</div>'
-        '<script>'
-        '${Platform.isLinux ? "R=(n,o)=>window.webkit.messageHandlers.msgToNative.postMessage(n+':'+JSON.stringify(o))" : "R=(n,o)=>{try{window.flutter_inappwebview.callHandler(n,o)}catch(e){console.log(e)}}"};$js'
-        '</script>'
-        '<script src="$_geetestJsUri" onload="G()" onerror="E()"></script>'
-        '<script src="$_geetestConfigUri?gt=$gt&callback=geetest_$ts" onerror="E()"></script>'
-        '</body></html>';
+    final bridge = Platform.isLinux
+        ? "R=(n,o)=>window.webkit.messageHandlers.msgToNative.postMessage(n+':'+JSON.stringify(o))"
+        : "R=(n,o)=>{try{window.flutter_inappwebview.callHandler(n,o)}catch(e){console.error(e)}}";
+
+    final js = '''
+var C,S,t;
+function showErr(msg){
+  var e=document.getElementById("E");
+  e.style.display="flex";
+  e.textContent=msg||"验证失败";
+}
+function hideErr(){document.getElementById("E").style.display="none"}
+function startGeetest(){
+  if(!C||!S||t)return;
+  hideErr();
+  try{
+    if(typeof initGeetest==="function"){
+      initGeetest(Object.assign({},C,{
+        gt:"$gt",
+        challenge:"$challenge",
+        offline:false,
+        new_captcha:true,
+        product:"$product",
+        width:"100%",
+        https:true
+      }), function(captchaObj){
+        t=captchaObj;
+        captchaObj.onSuccess(function(){
+          var r=captchaObj.getValidate();
+          if(r)R("success",r); else R("error","empty validate");
+        });
+        captchaObj.onError(function(o){R("error",o);showErr("验证出错，请关闭后重试")});
+        captchaObj.onClose(function(){R("close",{})});
+        var box=document.getElementById("captcha");
+        if(box)captchaObj.appendTo("#captcha");
+        if("$product"==="bind")captchaObj.onReady(function(){captchaObj.verify()});
+      });
+    } else if(typeof Geetest==="function"){
+      t=Geetest(Object.assign({},C,{
+        gt:"$gt",challenge:"$challenge",offline:false,new_captcha:true,
+        product:"$product",width:"100%",https:true,protocol:"https://"
+      }));
+      t.onSuccess(function(){R("success",t.getValidate())});
+      t.onError(function(o){R("error",o);showErr("验证出错")});
+      t.onClose(function(){R("close",{})});
+      t.onReady(function(){if("$product"==="bind")t.verify()});
+    } else {
+      showErr("验证脚本未加载");
+      R("error","Geetest not defined");
+    }
+  }catch(e){
+    showErr("验证初始化失败: "+e);
+    R("error",String(e));
+  }
+}
+geetest_$ts=function(d){
+  if(!d||d.status!="success"){
+    showErr("验证配置失败");
+    R("error",JSON.stringify(d));
+    return;
+  }
+  C=d.data||{};
+  startGeetest();
+};
+function G(){S=1;startGeetest()}
+function E(){showErr("验证码脚本加载失败，请检查网络");R("error","script load failed")}
+''';
+
+    return '''<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#fff}
+#captcha{width:100%;min-height:200px;padding:8px;box-sizing:border-box}
+#E{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+color:#c62828;font-size:14px;padding:16px;text-align:center;background:rgba(255,255,255,0.95);z-index:9999}
+</style></head>
+<body>
+<div id="captcha"></div>
+<div id="E">正在加载验证…</div>
+<script>$bridge;$js</script>
+<script src="$_gtJsUri" onload="G()" onerror="loadFullpage()"></script>
+<script>
+function loadFullpage(){
+  var s=document.createElement("script");
+  s.src="$_fullpageJsUri";
+  s.onload=G;
+  s.onerror=E;
+  document.body.appendChild(s);
+}
+</script>
+<script src="$_geetestConfigUri?gt=$gt&callback=geetest_$ts" onerror="E()"></script>
+</body></html>''';
   }
 
   void _onError(dynamic args) {
     debugPrint('geetest error: $args');
-    if (mounted) {
-      setState(() {
-        _statusText = '验证失败，请关闭后重试';
-      });
+    if (!mounted) return;
+    String msg = '验证失败，请关闭后重试';
+    if (args is List && args.isNotEmpty) {
+      final a = args.first;
+      if (a is String && a.isNotEmpty) {
+        msg = a.length > 80 ? '验证失败，请关闭后重试' : a;
+      } else if (a is Map) {
+        msg = a['msg']?.toString() ?? a['error']?.toString() ?? msg;
+      }
     }
+    setState(() => _statusText = msg);
   }
 
   Widget _buildWebView() {
@@ -93,12 +169,14 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
       webViewEnvironment: webViewEnvironment,
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
-        forceDark: ForceDark.AUTO,
+        javaScriptCanOpenWindowsAutomatically: true,
+        supportMultipleWindows: true,
+        forceDark: .OFF,
         useHybridComposition: true,
         useShouldOverrideUrlLoading: true,
-        userAgent: BrowserUa.mob,
+        userAgent: _userAgent,
         mixedContentMode: .MIXED_CONTENT_ALWAYS_ALLOW,
-        // 极验需要 DOM Storage；过度禁用会导致空白
+        // 极验依赖 localStorage / cookie
         domStorageEnabled: true,
         databaseEnabled: true,
         cacheEnabled: true,
@@ -109,11 +187,11 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
         allowsLinkPreview: false,
         geolocationEnabled: false,
         horizontalScrollBarEnabled: false,
-        verticalScrollBarEnabled: false,
+        verticalScrollBarEnabled: true,
         overScrollMode: .NEVER,
-        // iOS 过大 zoom 会导致内容跑出可视区看起来像空白
         pageZoom: 1,
         supportZoom: false,
+        transparentBackground: false,
       ),
       initialData: InAppWebViewInitialData(
         data: html,
@@ -127,12 +205,14 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
             handlerName: 'success',
             callback: (args) {
               if (args.isNotEmpty) {
-                if (args[0] case Map data) {
-                  Get.back(result: Map<String, dynamic>.from(data));
+                final raw = args[0];
+                if (raw is Map) {
+                  Get.back(result: Map<String, dynamic>.from(raw));
                   return;
                 }
               }
               debugPrint('geetest invalid result: $args');
+              _onError(['返回结果无效']);
             },
           )
           ..addJavaScriptHandler(
@@ -146,7 +226,8 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
       },
       onReceivedError: (controller, request, error) {
         debugPrint('geetest load error: ${error.description}');
-        if (mounted) {
+        // 忽略子资源错误，只关心主文档
+        if (request.isForMainFrame == true && mounted) {
           setState(() {
             _statusText = '页面加载失败：${error.description}';
           });
@@ -167,19 +248,23 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
       return AlertDialog(
         title: const Text('安全验证'),
         content: SizedBox(
-          width: 300,
-          height: 400,
+          width: 320,
+          height: 420,
           child: LinuxWebview(
             initialHtml: html,
-            userAgent: BrowserUa.mob,
-            incognito: true,
+            userAgent: _userAgent,
+            incognito: false,
             onWebMessageReceived: (msg) {
               final msgStr = msg.toString();
               if (msgStr.startsWith('success:')) {
                 final dataStr = msgStr.substring('success:'.length);
                 try {
                   final data = jsonDecode(dataStr);
-                  Get.back(result: data is Map ? Map<String, dynamic>.from(data as Map) : data);
+                  Get.back(
+                    result: data is Map
+                        ? Map<String, dynamic>.from(data as Map)
+                        : data,
+                  );
                 } catch (e) {
                   debugPrint('geetest decode error: $e');
                 }
@@ -195,8 +280,8 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
     }
 
     final size = MediaQuery.sizeOf(context);
-    final dialogW = size.width < 420 ? size.width * 0.92 : 380.0;
-    final dialogH = size.height < 560 ? size.height * 0.55 : 420.0;
+    final dialogW = size.width < 420 ? size.width * 0.92 : 400.0;
+    final dialogH = size.height < 560 ? size.height * 0.6 : 480.0;
 
     return AlertDialog(
       title: Row(
@@ -219,16 +304,33 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
             if (_statusText != null)
               Positioned.fill(
                 child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .surface
+                      .withValues(alpha: 0.95),
                   child: Center(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _statusText!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _statusText!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton(
+                            onPressed: () {
+                              setState(() => _statusText = null);
+                              // 关闭重开由用户点登录重试
+                              Get.back();
+                            },
+                            child: const Text('关闭'),
+                          ),
+                        ],
                       ),
                     ),
                   ),
