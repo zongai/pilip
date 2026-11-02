@@ -112,12 +112,9 @@ if ($platform.ToLower() -eq "ios") {
     } else {
         throw "$LASTEXITCODE"
     }
-    git apply $GeetestIOSPatch
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "$GeetestIOSPatch applied"
-    } else {
-        throw "$LASTEXITCODE"
-    }
+    # 不再强制使用 gt3 原生 SDK：bilibili 风控 challenge 常导致 error_34 captcha not found
+    # 统一走 GeetestWebviewDialog（WebView），与 Android/桌面一致
+    Write-Host "skip $GeetestIOSPatch (use WebView captcha)"
 }
 
 Set-Location $env:FLUTTER_ROOT
