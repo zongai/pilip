@@ -36,23 +36,23 @@ List<SettingsModel> get privacySettings => [
       leading: const Icon(Icons.favorite_border),
     ),
     SwitchModel(
-      title: '收藏列表隐藏短视频',
-      subtitle: '隐藏合集/收藏夹中短于设定时长的视频',
-      leading: const Icon(Icons.timer_off_outlined),
-      setKey: SettingBoxKey.hideShortVideosInFav,
+      title: '收藏列表按关键字隐藏',
+      subtitle: '标题包含关键字的视频在收藏/合集中隐藏',
+      leading: const Icon(Icons.filter_alt_outlined),
+      setKey: SettingBoxKey.hideFavByKeywords,
       defaultVal: false,
     ),
     NormalModel(
-      title: '短视频隐藏时长',
+      title: '隐藏关键字管理',
       getSubtitle: () {
-        final sec = Pref.hideShortVideoMaxSec;
-        if (sec >= 60 && sec % 60 == 0) {
-          return '当前 ${sec ~/ 60} 分钟（点击修改，单位：秒）';
-        }
-        return '当前 $sec 秒（点击修改）';
+        final n = Pref.favHideKeywords.length;
+        return n == 0 ? '未添加关键字' : '已添加 $n 个关键字';
       },
-      leading: const Icon(Icons.timelapse_outlined),
-      onTap: (context, setState) => _showHideShortDurationDialog(context, setState),
+      leading: const Icon(Icons.manage_search_outlined),
+      onTap: (context, setState) async {
+        await Get.toNamed('/favHideKeywordPage');
+        setState();
+      },
     ),
     NormalModel(
       onTap: (context, setState) {

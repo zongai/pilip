@@ -108,14 +108,15 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     if (!Pref.enableLocalFeatures) return const SizedBox.shrink();
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
-    return Material(
-      color: watched
-          ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.85)
-          : Colors.black54,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: _toggle,
+    // 独立手势层，避免被外层列表 InkWell 抢走点击
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      child: Material(
+        color: watched
+            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.85)
+            : Colors.black54,
+        shape: const CircleBorder(),
         child: Padding(
           padding: widget.padding,
           child: Icon(

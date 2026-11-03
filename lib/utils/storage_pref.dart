@@ -104,28 +104,52 @@ abstract final class Pref {
   static set enableLocalFeatures(bool v) =>
       _setting.put(SettingBoxKey.enableLocalFeatures, v);
 
-  /// 收藏/合集列表隐藏短于阈值的视频
-  static bool get hideShortVideosInFav =>
-      _setting.get(SettingBoxKey.hideShortVideosInFav, defaultValue: false);
+  /// 收藏/合集列表按标题关键字隐藏
+  static bool get hideFavByKeywords =>
+      _setting.get(SettingBoxKey.hideFavByKeywords, defaultValue: false);
 
-  static set hideShortVideosInFav(bool v) =>
-      _setting.put(SettingBoxKey.hideShortVideosInFav, v);
+  static set hideFavByKeywords(bool v) =>
+      _setting.put(SettingBoxKey.hideFavByKeywords, v);
 
-  /// 隐藏阈值（秒），默认 180（3 分钟）
-  static int get hideShortVideoMaxSec {
-    final v = _setting.get(SettingBoxKey.hideShortVideoMaxSec, defaultValue: 180);
-    if (v is int) return v.clamp(1, 3600);
-    if (v is num) return v.toInt().clamp(1, 3600);
-    return int.tryParse('$v')?.clamp(1, 3600) ?? 180;
+  static List<String> get favHideKeywords {
+    final raw = _setting.get(SettingBoxKey.favHideKeywords, defaultValue: <String>[]);
+    if (raw is! List) return <String>[];
+    return [
+      for (final e in raw)
+        if ('$e'.trim().isNotEmpty) '$e'.trim(),
+    ];
   }
 
-  static set hideShortVideoMaxSec(int v) =>
-      _setting.put(SettingBoxKey.hideShortVideoMaxSec, v.clamp(1, 3600));
+  static set favHideKeywords(List<String> list) =>
+      _setting.put(
+        SettingBoxKey.favHideKeywords,
+        [for (final e in list) if (e.trim().isNotEmpty) e.trim()],
+      );
 
-  static bool shouldHideShortVideo(int? durationSec) {
-    if (!hideShortVideosInFav) return false;
-    if (durationSec == null || durationSec <= 0) return false;
-    return durationSec < hideShortVideoMaxSec;
+  static void addFavHideKeyword(String keyword) {
+    final k = keyword.trim();
+    if (k.isEmpty) return;
+    final list = List<String>.from(favHideKeywords);
+    if (list.any((e) => e.toLowerCase() == k.toLowerCase())) return;
+    list.add(k);
+    favHideKeywords = list;
+  }
+
+  static void removeFavHideKeyword(String keyword) {
+    favHideKeywords = [
+      for (final e in favHideKeywords)
+        if (e.toLowerCase() != keyword.toLowerCase()) e,
+    ];
+  }
+
+  static bool shouldHideByKeyword(String? title) {
+    if (!hideFavByKeywords) return false;
+    if (title == null || title.isEmpty) return false;
+    final t = title.toLowerCase();
+    for (final k in favHideKeywords) {
+      if (k.isNotEmpty && t.contains(k.toLowerCase())) return true;
+    }
+    return false;
   }
 
   static List<Map> get localFollows {
@@ -733,9 +757,15 @@ abstract final class Pref {
 
   /// 本地观看进度：null=未看，-1=已看完，0=已看（无具体进度），>0=已看到的秒数
   /// 时长短于 3 分钟且未手动标未看时，默认返回 -1（已看完）
+  static bool _isExplicitUnwatched({int? aid, String? bvid}) {
+    final u = localUnwatched;
+    if (bvid != null && bvid.isNotEmpty && u.contains(bvid)) return true;
+    if (aid != null && (u.contains('av$aid') || u.contains('$aid'))) return true;
+    return false;
+  }
+
   static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
-    final key = _watchKey(aid: aid, bvid: bvid);
-    if (key != null && localUnwatched.contains(key)) {
+    if (_isExplicitUnwatched(aid: aid, bvid: bvid)) {
       return null; // 用户手动标为未看
     }
 
@@ -805,8 +835,11 @@ abstract final class Pref {
     int? duration,
     bool completed = true,
   }) {
-    final key = _watchKey(aid: aid, bvid: bvid);
-    if (key != null) _removeLocalUnwatched(key);
+    if (bvid != null && bvid.isNotEmpty) _removeLocalUnwatched(bvid);
+    if (aid != null) {
+      _removeLocalUnwatched('av$aid');
+      _removeLocalUnwatched('$aid');
+    }
     final dur = duration ?? 0;
     addLocalHistory(
       aid: aid,
@@ -821,12 +854,32 @@ abstract final class Pref {
     );
   }
 
-  /// 手动标为未看（从本地观看记录移除；短视频会写入未看覆盖，避免再默认已看）
+  /// 手动标为未看：移除历史，并写入未看覆盖（防止短视频再次被默认已看）
   static void markLocalUnwatched({int? aid, String? bvid}) {
-    final key = _watchKey(aid: aid, bvid: bvid);
-    if (key == null) return;
-    removeLocalHistory(key);
-    _addLocalUnwatched(key);
+    final keys = <String>{};
+    if (bvid != null && bvid.isNotEmpty) keys.add(bvid);
+    if (aid != null) {
+      keys.add('av$aid');
+      keys.add('$aid');
+    }
+    if (keys.isEmpty) return;
+    for (final key in keys) {
+      removeLocalHistory(key);
+      _addLocalUnwatched(key);
+    }
+    // 再按 bvid/aid 扫一遍历史，避免 key 形式不一致残留
+    final list = List<Map>.from(localHistory);
+    list.removeWhere((e) {
+      final eb = e['bvid']?.toString();
+      final ea = e['aid'];
+      if (bvid != null && bvid.isNotEmpty && eb == bvid) return true;
+      if (aid != null && ea != null && (ea == aid || ea.toString() == '$aid')) {
+        return true;
+      }
+      return false;
+    });
+    localHistory = list;
+    GlobalData().localHistoryList = list;
   }
 
 

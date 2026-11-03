@@ -132,10 +132,10 @@ class FavDetailController
     }
     final medias = response.medias;
     if (medias == null) return null;
-    if (!Pref.hideShortVideosInFav) return medias;
+    if (!Pref.hideFavByKeywords) return medias;
     return [
       for (final e in medias)
-        if (!Pref.shouldHideShortVideo(e.duration)) e,
+        if (!Pref.shouldHideByKeyword(e.title)) e,
     ];
   }
 
