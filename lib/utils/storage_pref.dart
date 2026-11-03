@@ -104,6 +104,30 @@ abstract final class Pref {
   static set enableLocalFeatures(bool v) =>
       _setting.put(SettingBoxKey.enableLocalFeatures, v);
 
+  /// 收藏/合集列表隐藏短于阈值的视频
+  static bool get hideShortVideosInFav =>
+      _setting.get(SettingBoxKey.hideShortVideosInFav, defaultValue: false);
+
+  static set hideShortVideosInFav(bool v) =>
+      _setting.put(SettingBoxKey.hideShortVideosInFav, v);
+
+  /// 隐藏阈值（秒），默认 180（3 分钟）
+  static int get hideShortVideoMaxSec {
+    final v = _setting.get(SettingBoxKey.hideShortVideoMaxSec, defaultValue: 180);
+    if (v is int) return v.clamp(1, 3600);
+    if (v is num) return v.toInt().clamp(1, 3600);
+    return int.tryParse('$v')?.clamp(1, 3600) ?? 180;
+  }
+
+  static set hideShortVideoMaxSec(int v) =>
+      _setting.put(SettingBoxKey.hideShortVideoMaxSec, v.clamp(1, 3600));
+
+  static bool shouldHideShortVideo(int? durationSec) {
+    if (!hideShortVideosInFav) return false;
+    if (durationSec == null || durationSec <= 0) return false;
+    return durationSec < hideShortVideoMaxSec;
+  }
+
   static List<Map> get localFollows {
     final raw = _localCache.get(LocalCacheKey.localFollows, defaultValue: <dynamic>[]);
     if (raw is! List) return <Map>[];

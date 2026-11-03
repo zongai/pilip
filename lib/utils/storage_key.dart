@@ -2,6 +2,8 @@
 
 abstract final class SettingBoxKey {
   static const String enableLocalFeatures = 'enableLocalFeatures';
+  static const String hideShortVideosInFav = 'hideShortVideosInFav';
+  static const String hideShortVideoMaxSec = 'hideShortVideoMaxSec';
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',
       defaultVideoQaCellular = 'defaultVideoQaCellular',

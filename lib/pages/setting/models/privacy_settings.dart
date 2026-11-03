@@ -4,6 +4,8 @@ import 'package:PiliPlus/utils/accounts/api_type.dart';
 import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -32,6 +34,25 @@ List<SettingsModel> get privacySettings => [
       title: '本地关注',
       subtitle: '无需登录的关注列表',
       leading: const Icon(Icons.favorite_border),
+    ),
+    SwitchModel(
+      title: '收藏列表隐藏短视频',
+      subtitle: '隐藏合集/收藏夹中短于设定时长的视频',
+      leading: const Icon(Icons.timer_off_outlined),
+      setKey: SettingBoxKey.hideShortVideosInFav,
+      defaultVal: false,
+    ),
+    NormalModel(
+      title: '短视频隐藏时长',
+      getSubtitle: () {
+        final sec = Pref.hideShortVideoMaxSec;
+        if (sec >= 60 && sec % 60 == 0) {
+          return '当前 ${sec ~/ 60} 分钟（点击修改，单位：秒）';
+        }
+        return '当前 $sec 秒（点击修改）';
+      },
+      leading: const Icon(Icons.timelapse_outlined),
+      onTap: (context, setState) => _showHideShortDurationDialog(context, setState),
     ),
     NormalModel(
       onTap: (context, setState) {

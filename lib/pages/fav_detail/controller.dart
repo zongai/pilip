@@ -130,7 +130,13 @@ class FavDetailController
     } else if (response.hasMore == false) {
       isEnd = true;
     }
-    return response.medias;
+    final medias = response.medias;
+    if (medias == null) return null;
+    if (!Pref.hideShortVideosInFav) return medias;
+    return [
+      for (final e in medias)
+        if (!Pref.shouldHideShortVideo(e.duration)) e,
+    ];
   }
 
   @override

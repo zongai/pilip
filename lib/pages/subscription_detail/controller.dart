@@ -5,6 +5,7 @@ import 'package:PiliPlus/models_new/sub/sub_detail/data.dart';
 import 'package:PiliPlus/models_new/sub/sub_detail/media.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/pages/common/page_order/page_order_mixin.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:get/get.dart';
 
 class SubDetailController
@@ -39,7 +40,13 @@ class SubDetailController
   @override
   List<SubDetailItemModel>? getDataList(SubDetailData response) {
     subInfo = response.info;
-    return response.medias;
+    final medias = response.medias;
+    if (medias == null) return null;
+    if (!Pref.hideShortVideosInFav) return medias;
+    return [
+      for (final e in medias)
+        if (!Pref.shouldHideShortVideo(e.duration)) e,
+    ];
   }
 
   @override
