@@ -676,7 +676,7 @@ abstract final class Pref {
     GlobalData().localHistoryList = [];
   }
 
-  /// 本地观看进度：null=未看，-1=已看完，>0=已看到的秒数
+  /// 本地观看进度：null=未看，-1=已看完，0=已看（无具体进度），>0=已看到的秒数
   static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
     Map? found;
     for (final e in GlobalData().localHistoryList) {
@@ -701,6 +701,8 @@ abstract final class Pref {
     } else {
       prog = int.tryParse('$pv') ?? 0;
     }
+    // -1 明确表示已看完
+    if (prog < 0) return -1;
     int dur = duration ?? 0;
     final dv = found['duration'];
     if (dv is int) {
@@ -711,8 +713,8 @@ abstract final class Pref {
       final parsed = int.tryParse('$dv');
       if (parsed != null) dur = parsed;
     }
-    if (prog <= 0) {
-      // 有历史记录但进度为 0：仍算看过入口，标为已看（开始过）
+    if (prog == 0) {
+      // 有历史记录但进度为 0：仍算看过
       return 0;
     }
     if (dur > 0 && prog >= (dur * 0.95).floor()) {
@@ -723,6 +725,39 @@ abstract final class Pref {
 
   static bool isLocalWatched({int? aid, String? bvid}) {
     return getLocalWatchProgress(aid: aid, bvid: bvid) != null;
+  }
+
+  /// 手动标为已看 / 已看完
+  static void markLocalWatched({
+    int? aid,
+    String? bvid,
+    int? cid,
+    String? title,
+    String? cover,
+    String? authorName,
+    int? authorMid,
+    int? duration,
+    bool completed = true,
+  }) {
+    final dur = duration ?? 0;
+    addLocalHistory(
+      aid: aid,
+      bvid: bvid,
+      cid: cid,
+      title: title,
+      cover: cover,
+      authorName: authorName,
+      authorMid: authorMid,
+      progress: completed ? -1 : (dur > 0 ? 1 : 0),
+      duration: dur,
+    );
+  }
+
+  /// 手动标为未看（从本地观看记录移除）
+  static void markLocalUnwatched({int? aid, String? bvid}) {
+    final key = (bvid != null && bvid.isNotEmpty) ? bvid : (aid != null ? 'av$aid' : null);
+    if (key == null) return;
+    removeLocalHistory(key);
   }
 
 

@@ -18,11 +18,12 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-// 收藏视频卡片 - 水平布局
-class FavVideoCardH extends StatelessWidget {
+// 收藏视频卡片 - 水平布局（支持本地已看/未看标注与手动管理）
+class FavVideoCardH extends StatefulWidget {
   final FavDetailItemModel item;
   final int? index;
   final BaseFavController? ctr;
@@ -34,6 +35,14 @@ class FavVideoCardH extends StatelessWidget {
     this.ctr,
   }) : assert(ctr == null || index != null);
 
+  @override
+  State<FavVideoCardH> createState() => _FavVideoCardHState();
+}
+
+class _FavVideoCardHState extends State<FavVideoCardH> {
+  FavDetailItemModel get item => widget.item;
+  int? get index => widget.index;
+  BaseFavController? get ctr => widget.ctr;
   bool get isSort => ctr == null;
 
   void _onTap() {
@@ -63,25 +72,123 @@ class FavVideoCardH extends StatelessWidget {
     }
   }
 
+
+  void _showWatchManage(BuildContext context) {
+    final watched = Pref.isLocalWatched(aid: item.id, bvid: item.bvid);
+    final progress = Pref.getLocalWatchProgress(
+      aid: item.id,
+      bvid: item.bvid,
+      duration: item.duration,
+    );
+    final isOwner = !isSort && (ctr?.isOwner ?? false);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  item.title ?? '',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: const Text('管理'),
+              ),
+              const Divider(height: 1),
+              if (Pref.enableLocalFeatures) ...[
+                if (progress != -1)
+                  ListTile(
+                    leading: const Icon(Icons.check_circle_outline),
+                    title: const Text('标为已看完'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Pref.markLocalWatched(
+                        aid: item.id,
+                        bvid: item.bvid,
+                        title: item.title,
+                        cover: item.cover,
+                        authorName: item.upper?.name,
+                        authorMid: item.upper?.mid,
+                        duration: item.duration,
+                        completed: true,
+                      );
+                      SmartDialog.showToast('已标为已看完');
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                if (watched)
+                  ListTile(
+                    leading: const Icon(Icons.visibility_off_outlined),
+                    title: const Text('标为未看'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Pref.markLocalUnwatched(aid: item.id, bvid: item.bvid);
+                      SmartDialog.showToast('已标为未看');
+                      if (mounted) setState(() {});
+                    },
+                  ),
+              ],
+              if (isOwner)
+                ListTile(
+                  leading: const Icon(Icons.checklist),
+                  title: const Text('多选'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    ctr!
+                      ..enableMultiSelect.value = true
+                      ..onSelect(item);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('保存封面'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  imageSaveDialog(
+                    title: item.title,
+                    cover: item.cover,
+                    bvid: item.bvid,
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOwner = !isSort && ctr!.isOwner;
     late final enableMultiSelect = ctr?.enableMultiSelect.value ?? false;
     final colorScheme = ColorScheme.of(context);
 
-    final onLongPress = isSort || enableMultiSelect
-        ? null
-        : isOwner && !enableMultiSelect
-        ? () {
-            ctr!
-              ..enableMultiSelect.value = true
-              ..onSelect(item);
-          }
-        : () => imageSaveDialog(
-            title: item.title,
-            cover: item.cover,
-            bvid: item.bvid,
-          );
+    void openImageSave() => imageSaveDialog(
+          title: item.title,
+          cover: item.cover,
+          bvid: item.bvid,
+        );
+
+    void onLongPressAction() {
+      if (isSort || enableMultiSelect) return;
+      if (Pref.enableLocalFeatures) {
+        _showWatchManage(context);
+        return;
+      }
+      if (isOwner) {
+        ctr!
+          ..enableMultiSelect.value = true
+          ..onSelect(item);
+        return;
+      }
+      openImageSave();
+    }
+
+    final onLongPress =
+        isSort || enableMultiSelect ? null : onLongPressAction;
 
     return Material(
       type: MaterialType.transparency,
