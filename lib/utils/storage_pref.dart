@@ -676,8 +676,45 @@ abstract final class Pref {
     GlobalData().localHistoryList = [];
   }
 
+  /// 短视频阈值（秒）：低于此时长在列表中默认视为已看完（可手动标未看）
+  static const int shortVideoAutoWatchedSec = 180;
+
+  static String? _watchKey({int? aid, String? bvid}) {
+    if (bvid != null && bvid.isNotEmpty) return bvid;
+    if (aid != null) return 'av$aid';
+    return null;
+  }
+
+  static Set<String> get localUnwatched {
+    final raw = _localCache.get(
+      LocalCacheKey.localUnwatched,
+      defaultValue: <String>[],
+    );
+    if (raw is! List) return <String>{};
+    return {for (final e in raw) '$e'};
+  }
+
+  static set localUnwatched(Set<String> set) =>
+      _localCache.put(LocalCacheKey.localUnwatched, set.toList());
+
+  static void _addLocalUnwatched(String key) {
+    final s = localUnwatched..add(key);
+    localUnwatched = s;
+  }
+
+  static void _removeLocalUnwatched(String key) {
+    final s = localUnwatched..remove(key);
+    localUnwatched = s;
+  }
+
   /// 本地观看进度：null=未看，-1=已看完，0=已看（无具体进度），>0=已看到的秒数
+  /// 时长短于 3 分钟且未手动标未看时，默认返回 -1（已看完）
   static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
+    final key = _watchKey(aid: aid, bvid: bvid);
+    if (key != null && localUnwatched.contains(key)) {
+      return null; // 用户手动标为未看
+    }
+
     Map? found;
     for (final e in GlobalData().localHistoryList) {
       final eb = e['bvid']?.toString();
@@ -691,40 +728,45 @@ abstract final class Pref {
         break;
       }
     }
-    if (found == null) return null;
-    int prog = 0;
-    final pv = found['progress'];
-    if (pv is int) {
-      prog = pv;
-    } else if (pv is num) {
-      prog = pv.toInt();
-    } else {
-      prog = int.tryParse('$pv') ?? 0;
+    if (found != null) {
+      int prog = 0;
+      final pv = found['progress'];
+      if (pv is int) {
+        prog = pv;
+      } else if (pv is num) {
+        prog = pv.toInt();
+      } else {
+        prog = int.tryParse('$pv') ?? 0;
+      }
+      if (prog < 0) return -1;
+      int dur = duration ?? 0;
+      final dv = found['duration'];
+      if (dv is int) {
+        dur = dv;
+      } else if (dv is num) {
+        dur = dv.toInt();
+      } else {
+        final parsed = int.tryParse('$dv');
+        if (parsed != null) dur = parsed;
+      }
+      if (prog == 0) return 0;
+      if (dur > 0 && prog >= (dur * 0.95).floor()) {
+        return -1;
+      }
+      return prog;
     }
-    // -1 明确表示已看完
-    if (prog < 0) return -1;
-    int dur = duration ?? 0;
-    final dv = found['duration'];
-    if (dv is int) {
-      dur = dv;
-    } else if (dv is num) {
-      dur = dv.toInt();
-    } else {
-      final parsed = int.tryParse('$dv');
-      if (parsed != null) dur = parsed;
-    }
-    if (prog == 0) {
-      // 有历史记录但进度为 0：仍算看过
-      return 0;
-    }
-    if (dur > 0 && prog >= (dur * 0.95).floor()) {
+
+    // 无历史：短视频默认已看完
+    final dur = duration ?? 0;
+    if (dur > 0 && dur < shortVideoAutoWatchedSec) {
       return -1;
     }
-    return prog;
+    return null;
   }
 
-  static bool isLocalWatched({int? aid, String? bvid}) {
-    return getLocalWatchProgress(aid: aid, bvid: bvid) != null;
+  static bool isLocalWatched({int? aid, String? bvid, int? duration}) {
+    return getLocalWatchProgress(aid: aid, bvid: bvid, duration: duration) !=
+        null;
   }
 
   /// 手动标为已看 / 已看完
@@ -739,6 +781,8 @@ abstract final class Pref {
     int? duration,
     bool completed = true,
   }) {
+    final key = _watchKey(aid: aid, bvid: bvid);
+    if (key != null) _removeLocalUnwatched(key);
     final dur = duration ?? 0;
     addLocalHistory(
       aid: aid,
@@ -753,11 +797,12 @@ abstract final class Pref {
     );
   }
 
-  /// 手动标为未看（从本地观看记录移除）
+  /// 手动标为未看（从本地观看记录移除；短视频会写入未看覆盖，避免再默认已看）
   static void markLocalUnwatched({int? aid, String? bvid}) {
-    final key = (bvid != null && bvid.isNotEmpty) ? bvid : (aid != null ? 'av$aid' : null);
+    final key = _watchKey(aid: aid, bvid: bvid);
     if (key == null) return;
     removeLocalHistory(key);
+    _addLocalUnwatched(key);
   }
 
 

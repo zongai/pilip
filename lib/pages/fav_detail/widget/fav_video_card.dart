@@ -74,7 +74,7 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
 
 
   void _showWatchManage(BuildContext context) {
-    final watched = Pref.isLocalWatched(aid: item.id, bvid: item.bvid);
+    final watched = Pref.isLocalWatched(aid: item.id, bvid: item.bvid, duration: item.duration);
     final progress = Pref.getLocalWatchProgress(
       aid: item.id,
       bvid: item.bvid,
