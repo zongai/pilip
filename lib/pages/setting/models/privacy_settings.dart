@@ -36,6 +36,13 @@ List<SettingsModel> get privacySettings => [
       leading: const Icon(Icons.favorite_border),
     ),
     SwitchModel(
+      title: '短视频默认已看',
+      subtitle: '时长短于 3 分钟的视频在列表中默认标为已看完，仍可手动改未看',
+      leading: const Icon(Icons.timer_outlined),
+      setKey: SettingBoxKey.autoWatchShortVideos,
+      defaultVal: true,
+    ),
+    SwitchModel(
       title: '收藏列表按关键字隐藏',
       subtitle: '标题包含关键字的视频在收藏/合集中隐藏',
       leading: const Icon(Icons.filter_alt_outlined),

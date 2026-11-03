@@ -3,6 +3,7 @@
 abstract final class SettingBoxKey {
   static const String enableLocalFeatures = 'enableLocalFeatures';
   static const String hideFavByKeywords = 'hideFavByKeywords';
+  static const String autoWatchShortVideos = 'autoWatchShortVideos';
   static const String favHideKeywords = 'favHideKeywords';
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',

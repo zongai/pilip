@@ -111,6 +111,13 @@ abstract final class Pref {
   static set hideFavByKeywords(bool v) =>
       _setting.put(SettingBoxKey.hideFavByKeywords, v);
 
+  /// 时长短于 3 分钟的视频在列表中默认视为已看完
+  static bool get autoWatchShortVideos =>
+      _setting.get(SettingBoxKey.autoWatchShortVideos, defaultValue: true);
+
+  static set autoWatchShortVideos(bool v) =>
+      _setting.put(SettingBoxKey.autoWatchShortVideos, v);
+
   static List<String> get favHideKeywords {
     final raw = _setting.get(SettingBoxKey.favHideKeywords, defaultValue: <String>[]);
     if (raw is! List) return <String>[];
@@ -810,9 +817,11 @@ abstract final class Pref {
       return prog;
     }
 
-    // 无历史：短视频默认已看完
+    // 无历史：可选短视频默认已看完
     final dur = duration ?? 0;
-    if (dur > 0 && dur < shortVideoAutoWatchedSec) {
+    if (autoWatchShortVideos &&
+        dur > 0 &&
+        dur < shortVideoAutoWatchedSec) {
       return -1;
     }
     return null;
