@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
+import 'package:PiliPlus/common/widgets/local_watch_toggle.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
@@ -70,6 +71,22 @@ class SubVideoCardH extends StatelessWidget {
                           src: videoItem.cover,
                           width: maxWidth,
                           height: maxHeight,
+                        ),
+                        Positioned(
+                          left: 4,
+                          top: 4,
+                          child: LocalWatchToggleIcon(
+                            aid: videoItem.id,
+                            bvid: videoItem.bvid,
+                            title: videoItem.title,
+                            cover: videoItem.cover,
+                            duration: videoItem.duration,
+                          ),
+                        ),
+                        LocalWatchProgressBar(
+                          aid: videoItem.id,
+                          bvid: videoItem.bvid,
+                          duration: videoItem.duration,
                         ),
                         PBadge(
                           text: DurationUtils.formatDuration(

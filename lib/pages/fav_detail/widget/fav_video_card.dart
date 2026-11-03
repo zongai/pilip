@@ -1,6 +1,6 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
-import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
+import 'package:PiliPlus/common/widgets/local_watch_toggle.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -227,92 +227,20 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                           Positioned(
                             left: 4,
                             top: 4,
-                            child: Material(
-                              color: Colors.black54,
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () {
-                                  final progress =
-                                      Pref.getLocalWatchProgress(
-                                    aid: item.id,
-                                    bvid: item.bvid,
-                                    duration: item.duration,
-                                  );
-                                  if (progress == null) {
-                                    Pref.markLocalWatched(
-                                      aid: item.id,
-                                      bvid: item.bvid,
-                                      title: item.title,
-                                      cover: item.cover,
-                                      authorName: item.upper?.name,
-                                      authorMid: item.upper?.mid,
-                                      duration: item.duration,
-                                      completed: true,
-                                    );
-                                    SmartDialog.showToast('已标为已看完');
-                                  } else {
-                                    Pref.markLocalUnwatched(
-                                      aid: item.id,
-                                      bvid: item.bvid,
-                                    );
-                                    SmartDialog.showToast('已标为未看');
-                                  }
-                                  if (mounted) setState(() {});
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(5),
-                                  child: Icon(
-                                    Pref.getLocalWatchProgress(
-                                              aid: item.id,
-                                              bvid: item.bvid,
-                                              duration: item.duration,
-                                            ) ==
-                                            null
-                                        ? Icons.radio_button_unchecked
-                                        : Icons.check_circle,
-                                    size: 18,
-                                    color: Pref.getLocalWatchProgress(
-                                              aid: item.id,
-                                              bvid: item.bvid,
-                                              duration: item.duration,
-                                            ) ==
-                                            null
-                                        ? Colors.white70
-                                        : colorScheme.primary,
-                                  ),
-                                ),
-                              ),
+                            child: LocalWatchToggleIcon(
+                              aid: item.id,
+                              bvid: item.bvid,
+                              title: item.title,
+                              cover: item.cover,
+                              authorName: item.upper?.name,
+                              authorMid: item.upper?.mid,
+                              duration: item.duration,
                             ),
                           ),
-                          Builder(
-                            builder: (context) {
-                              final progress = Pref.getLocalWatchProgress(
-                                aid: item.id,
-                                bvid: item.bvid,
-                                duration: item.duration,
-                              );
-                              final duration = item.duration ?? 0;
-                              if (progress == null ||
-                                  progress == 0 ||
-                                  duration <= 0) {
-                                return const SizedBox.shrink();
-                              }
-                              final value = progress == -1
-                                  ? 1.0
-                                  : (progress / duration).clamp(0.0, 1.0);
-                              return Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                child: VideoProgressIndicator(
-                                  color: colorScheme.primary,
-                                  backgroundColor:
-                                      colorScheme.secondaryContainer,
-                                  progress: value,
-                                ),
-                              );
-                            },
+                          LocalWatchProgressBar(
+                            aid: item.id,
+                            bvid: item.bvid,
+                            duration: item.duration,
                           ),
                         ],
                         PBadge(

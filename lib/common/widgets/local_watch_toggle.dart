@@ -1,0 +1,131 @@
+import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:material_ui/material_ui.dart';
+
+/// 本地已看/未看切换图标（点击切换状态）
+class LocalWatchToggleIcon extends StatefulWidget {
+  const LocalWatchToggleIcon({
+    super.key,
+    this.aid,
+    this.bvid,
+    this.cid,
+    this.title,
+    this.cover,
+    this.authorName,
+    this.authorMid,
+    this.duration,
+    this.size = 18,
+    this.padding = const EdgeInsets.all(5),
+  });
+
+  final int? aid;
+  final String? bvid;
+  final int? cid;
+  final String? title;
+  final String? cover;
+  final String? authorName;
+  final int? authorMid;
+  final int? duration;
+  final double size;
+  final EdgeInsets padding;
+
+  @override
+  State<LocalWatchToggleIcon> createState() => _LocalWatchToggleIconState();
+}
+
+class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
+  int? get _progress => Pref.getLocalWatchProgress(
+        aid: widget.aid,
+        bvid: widget.bvid,
+        duration: widget.duration,
+      );
+
+  bool get _watched => _progress != null;
+
+  void _toggle() {
+    if (!Pref.enableLocalFeatures) return;
+    if (_watched) {
+      Pref.markLocalUnwatched(aid: widget.aid, bvid: widget.bvid);
+      SmartDialog.showToast('已标为未看');
+    } else {
+      Pref.markLocalWatched(
+        aid: widget.aid,
+        bvid: widget.bvid,
+        cid: widget.cid,
+        title: widget.title,
+        cover: widget.cover,
+        authorName: widget.authorName,
+        authorMid: widget.authorMid,
+        duration: widget.duration,
+        completed: true,
+      );
+      SmartDialog.showToast('已标为已看完');
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Pref.enableLocalFeatures) return const SizedBox.shrink();
+    final colorScheme = ColorScheme.of(context);
+    final watched = _watched;
+    return Material(
+      color: Colors.black54,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _toggle,
+        child: Padding(
+          padding: widget.padding,
+          child: Icon(
+            watched ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: widget.size,
+            color: watched ? colorScheme.primary : Colors.white70,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 底部进度条（有具体进度时显示）
+class LocalWatchProgressBar extends StatelessWidget {
+  const LocalWatchProgressBar({
+    super.key,
+    this.aid,
+    this.bvid,
+    this.duration,
+  });
+
+  final int? aid;
+  final String? bvid;
+  final int? duration;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Pref.enableLocalFeatures) return const SizedBox.shrink();
+    final progress = Pref.getLocalWatchProgress(
+      aid: aid,
+      bvid: bvid,
+      duration: duration,
+    );
+    final dur = duration ?? 0;
+    if (progress == null || progress == 0 || dur <= 0) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = ColorScheme.of(context);
+    final value =
+        progress == -1 ? 1.0 : (progress / dur).clamp(0.0, 1.0);
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: LinearProgressIndicator(
+        value: value,
+        minHeight: 3,
+        backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.6),
+        color: colorScheme.primary,
+      ),
+    );
+  }
+}
