@@ -165,6 +165,12 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
     final isOwner = !isSort && ctr!.isOwner;
     late final enableMultiSelect = ctr?.enableMultiSelect.value ?? false;
     final colorScheme = ColorScheme.of(context);
+    final watched = Pref.enableLocalFeatures &&
+        Pref.isLocalWatched(
+          aid: item.id,
+          bvid: item.bvid,
+          duration: item.duration,
+        );
 
     void openImageSave() => imageSaveDialog(
           title: item.title,
