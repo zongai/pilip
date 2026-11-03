@@ -2,6 +2,40 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 灰度矩阵：已看内容弱化，突出未看
+const ColorFilter kWatchedGrayFilter = ColorFilter.matrix(<double>[
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0, 0, 0, 1, 0,
+]);
+
+/// 已看时弱化子组件（透明度 + 灰度），未看保持原样
+class LocalWatchDim extends StatelessWidget {
+  const LocalWatchDim({
+    super.key,
+    required this.watched,
+    required this.child,
+    this.opacity = 0.52,
+  });
+
+  final bool watched;
+  final Widget child;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!watched) return child;
+    return Opacity(
+      opacity: opacity,
+      child: ColorFiltered(
+        colorFilter: kWatchedGrayFilter,
+        child: child,
+      ),
+    );
+  }
+}
+
 /// 本地已看/未看切换图标（点击切换状态）
 class LocalWatchToggleIcon extends StatefulWidget {
   const LocalWatchToggleIcon({
@@ -16,6 +50,7 @@ class LocalWatchToggleIcon extends StatefulWidget {
     this.duration,
     this.size = 18,
     this.padding = const EdgeInsets.all(5),
+    this.onChanged,
   });
 
   final int? aid;
@@ -28,6 +63,8 @@ class LocalWatchToggleIcon extends StatefulWidget {
   final int? duration;
   final double size;
   final EdgeInsets padding;
+  /// 状态变化后回调，便于外层刷新置灰
+  final ValueChanged<bool>? onChanged;
 
   @override
   State<LocalWatchToggleIcon> createState() => _LocalWatchToggleIconState();
@@ -44,6 +81,7 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
 
   void _toggle() {
     if (!Pref.enableLocalFeatures) return;
+    final nextWatched = !_watched;
     if (_watched) {
       Pref.markLocalUnwatched(aid: widget.aid, bvid: widget.bvid);
       SmartDialog.showToast('已标为未看');
@@ -62,6 +100,7 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
       SmartDialog.showToast('已标为已看完');
     }
     if (mounted) setState(() {});
+    widget.onChanged?.call(nextWatched);
   }
 
   @override
@@ -70,7 +109,9 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
     return Material(
-      color: Colors.black54,
+      color: watched
+          ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.85)
+          : Colors.black54,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -80,7 +121,7 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
           child: Icon(
             watched ? Icons.check_circle : Icons.radio_button_unchecked,
             size: widget.size,
-            color: watched ? colorScheme.primary : Colors.white70,
+            color: watched ? colorScheme.primary : Colors.white,
           ),
         ),
       ),
@@ -114,8 +155,7 @@ class LocalWatchProgressBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final colorScheme = ColorScheme.of(context);
-    final value =
-        progress == -1 ? 1.0 : (progress / dur).clamp(0.0, 1.0);
+    final value = progress == -1 ? 1.0 : (progress / dur).clamp(0.0, 1.0);
     return Positioned(
       left: 0,
       right: 0,
@@ -123,8 +163,8 @@ class LocalWatchProgressBar extends StatelessWidget {
       child: LinearProgressIndicator(
         value: value,
         minHeight: 3,
-        backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.6),
-        color: colorScheme.primary,
+        backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+        color: colorScheme.primary.withValues(alpha: 0.85),
       ),
     );
   }

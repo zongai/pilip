@@ -217,12 +217,15 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        NetworkImgLayer(
-                          src: item.cover,
-                          width: maxWidth,
-                          height: maxHeight,
+                        LocalWatchDim(
+                          watched: watched,
+                          child: NetworkImgLayer(
+                            src: item.cover,
+                            width: maxWidth,
+                            height: maxHeight,
+                          ),
                         ),
-                        // 本地观看：图标显示已看/未看，点击切换
+                        // 图标始终清晰可点
                         if (Pref.enableLocalFeatures) ...[
                           Positioned(
                             left: 4,
@@ -235,6 +238,9 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                               authorName: item.upper?.name,
                               authorMid: item.upper?.mid,
                               duration: item.duration,
+                              onChanged: (_) {
+                                if (mounted) setState(() {});
+                              },
                             ),
                           ),
                           LocalWatchProgressBar(
@@ -277,7 +283,7 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                 ),
               ),
               const SizedBox(width: 10),
-              content(context, colorScheme, isOwner),
+              content(context, colorScheme, isOwner, watched),
             ],
           ),
         ),
@@ -285,9 +291,11 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
     );
   }
 
-  Widget content(BuildContext context, ColorScheme colorScheme, bool isOwner) {
+  Widget content(BuildContext context, ColorScheme colorScheme, bool isOwner, bool watched) {
     return Expanded(
-      child: Stack(
+      child: LocalWatchDim(
+        watched: watched,
+        child: Stack(
         clipBehavior: Clip.none,
         children: [
           Column(
@@ -297,8 +305,9 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
               Text(
                 item.title!,
                 textAlign: TextAlign.start,
-                style: const TextStyle(
+                style: TextStyle(
                   letterSpacing: 0.3,
+                  color: watched ? colorScheme.outline : null,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -374,6 +383,7 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
