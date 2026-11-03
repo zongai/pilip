@@ -202,6 +202,8 @@ class _EpisodePanelState extends State<EpisodePanel>
         _videoDetail = _ugcController.videoDetail.rawValue;
         _episodes = _videoDetail.pages!;
         _addUgcListener();
+        // 分P 若属于合集，同样显示本地/官方订阅按钮
+        _initSeasonFav();
 
       case .season:
         _isUgc = true;
@@ -223,33 +225,7 @@ class _EpisodePanelState extends State<EpisodePanel>
           _episodes = _sections.first.episodes!;
         }
         _addUgcListener();
-
-        final sid = _videoDetail.seasonId ?? _videoDetail.ugcSeason?.id;
-        if (sid != null) {
-          _seasonId = sid;
-          if (Pref.enableLocalFeatures) {
-            final localFav = Pref.isLocalSeasonFav(sid);
-            _favState = RxnBool(localFav);
-            _ugcController.seasonFavState[sid] = localFav;
-          } else if (Accounts.main.isLogin) {
-            final favState = _ugcController.seasonFavState[sid];
-            if (favState != null) {
-              _favState = RxnBool(favState);
-            } else {
-              _favState = RxnBool(null);
-              VideoHttp.videoRelation(bvid: _ugcController.bvid).then(
-                (result) {
-                  if (!mounted) return;
-                  if (result case Success(:final response)) {
-                    final seasonFav = response.seasonFav ?? false;
-                    _favState!.value = seasonFav;
-                    _ugcController.seasonFavState[_seasonId] = seasonFav;
-                  }
-                },
-              );
-            }
-          }
-        }
+        _initSeasonFav();
 
       case .pgc:
         _isUgc = false;
@@ -703,6 +679,38 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
   }
 
+
+  void _initSeasonFav() {
+    final sid = _videoDetail.seasonId ?? _videoDetail.ugcSeason?.id;
+    if (sid == null) return;
+    _seasonId = sid;
+    if (Pref.enableLocalFeatures) {
+      final localFav = Pref.isLocalSeasonFav(sid);
+      _favState = RxnBool(localFav);
+      if (_isUgc) {
+        _ugcController.seasonFavState[sid] = localFav;
+      }
+      return;
+    }
+    if (!Accounts.main.isLogin || !_isUgc) return;
+    final favState = _ugcController.seasonFavState[sid];
+    if (favState != null) {
+      _favState = RxnBool(favState);
+    } else {
+      _favState = RxnBool(null);
+      VideoHttp.videoRelation(bvid: _ugcController.bvid).then(
+        (result) {
+          if (!mounted) return;
+          if (result case Success(:final response)) {
+            final seasonFav = response.seasonFav ?? false;
+            _favState!.value = seasonFav;
+            _ugcController.seasonFavState[_seasonId] = seasonFav;
+          }
+        },
+      );
+    }
+  }
+
   Future<void> _onFavSeason(bool isFav) async {
     if (Pref.enableLocalFeatures) {
       if (isFav) {
@@ -739,14 +747,18 @@ class _EpisodePanelState extends State<EpisodePanel>
   }
 
   Widget _buildFavBtn(bool? isFav) {
-    if (isFav == null) return const SizedBox.shrink();
+    // null = 官方状态加载中，仍显示可点占位；本地模式始终有 bool
+    final fav = isFav ?? false;
+    final loading = isFav == null;
     return iconButton(
       iconSize: 22,
-      tooltip: isFav ? '取消订阅' : '订阅',
-      icon: isFav
-          ? const Icon(Icons.notifications_off_outlined)
-          : const Icon(Icons.notifications_active_outlined),
-      onPressed: () => _onFavSeason(isFav),
+      tooltip: loading
+          ? '订阅'
+          : (fav ? '取消订阅' : '订阅'),
+      icon: fav
+          ? const Icon(Icons.star_rounded)
+          : const Icon(Icons.star_outline_rounded),
+      onPressed: loading ? null : () => _onFavSeason(fav),
     );
   }
 
