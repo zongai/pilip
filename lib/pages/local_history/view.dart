@@ -3,7 +3,6 @@ import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -236,9 +235,6 @@ class _LocalHistoryPageState extends State<LocalHistoryPage> {
                     ),
                     onTap: () => _open(item),
                     onLongPress: () => _showManageSheet(item),
-                    onSecondaryTap: PlatformUtils.isMobile
-                        ? null
-                        : () => _showManageSheet(item),
                     trailing: IconButton(
                       icon: const Icon(Icons.more_vert, size: 20),
                       tooltip: '管理',
