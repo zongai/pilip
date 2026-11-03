@@ -63,7 +63,12 @@ class EpisodeItem extends BaseEpisodeItem {
   });
 
   factory EpisodeItem.fromJson(Map<String, dynamic> json) => EpisodeItem(
-    seasonId: json['season_id'] as int?,
+    seasonId: () {
+      final v = json['season_id'];
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v');
+    }(),
     sectionId: json['section_id'] as int?,
     id: json['id'] as int?,
     aid: json['aid'] as int?,

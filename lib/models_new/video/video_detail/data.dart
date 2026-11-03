@@ -11,6 +11,13 @@ import 'package:PiliPlus/models_new/video/video_detail/ugc_season.dart';
 import 'package:PiliPlus/utils/parse_string.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
+int? _asSeasonId(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse('$v');
+}
+
 class VideoDetailData {
   String? bvid;
   int? aid;
@@ -119,7 +126,7 @@ class VideoDetailData {
         dimension: json['dimension'] == null
             ? null
             : Dimension.fromJson(json['dimension'] as Map<String, dynamic>),
-        seasonId: json['season_id'] as int?,
+        seasonId: _asSeasonId(json['season_id']),
         isUpowerExclusive: json['is_upower_exclusive'] as bool?,
         pages: (json['pages'] as List<dynamic>?)
             ?.map((e) => Part.fromJson(e as Map<String, dynamic>))

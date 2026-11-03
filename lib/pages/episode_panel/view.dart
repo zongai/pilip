@@ -89,7 +89,7 @@ class _EpisodePanelState extends State<EpisodePanel>
   late final _pgcController = _introController as PgcIntroController;
 
   // fav
-  late int _seasonId;
+  int _seasonId = 0;
   RxnBool? _favState;
 
   // reverse
@@ -680,19 +680,57 @@ class _EpisodePanelState extends State<EpisodePanel>
   }
 
 
+  int? _resolveSeasonId() {
+    int? asId(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse('$v');
+    }
+
+    final direct = asId(_videoDetail.seasonId) ?? asId(_videoDetail.ugcSeason?.id);
+    if (direct != null) return direct;
+
+    // 从分集/当前列表里兜底取 season_id（部分合集详情未带顶层 id）
+    for (final ep in _episodes) {
+      if (ep is ugc.EpisodeItem) {
+        final id = asId(ep.seasonId);
+        if (id != null) return id;
+      }
+    }
+    final sections = _videoDetail.ugcSeason?.sections;
+    if (sections != null) {
+      for (final sec in sections) {
+        for (final ep in sec.episodes ?? const []) {
+          if (ep is ugc.EpisodeItem) {
+            final id = asId(ep.seasonId);
+            if (id != null) return id;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   void _initSeasonFav() {
-    final sid = _videoDetail.seasonId ?? _videoDetail.ugcSeason?.id;
-    if (sid == null) return;
-    _seasonId = sid;
+    final sid = _resolveSeasonId();
+    // 合集面板：即使 id 暂缺也先展示按钮（点击时再校验）
+    final forceShow = _type == .season || _videoDetail.ugcSeason != null;
+    if (sid == null && !forceShow) return;
+
+    if (sid != null) {
+      _seasonId = sid;
+    }
+
     if (Pref.enableLocalFeatures) {
-      final localFav = Pref.isLocalSeasonFav(sid);
+      final localFav = sid != null ? Pref.isLocalSeasonFav(sid) : false;
       _favState = RxnBool(localFav);
-      if (_isUgc) {
+      if (_isUgc && sid != null) {
         _ugcController.seasonFavState[sid] = localFav;
       }
       return;
     }
-    if (!Accounts.main.isLogin || !_isUgc) return;
+    if (!Accounts.main.isLogin || !_isUgc || sid == null) return;
     final favState = _ugcController.seasonFavState[sid];
     if (favState != null) {
       _favState = RxnBool(favState);
@@ -713,6 +751,12 @@ class _EpisodePanelState extends State<EpisodePanel>
 
   Future<void> _onFavSeason(bool isFav) async {
     if (Pref.enableLocalFeatures) {
+      final sid = _resolveSeasonId() ?? ( _seasonId > 0 ? _seasonId : null);
+      if (sid == null) {
+        SmartDialog.showToast('无法识别合集 ID，暂不可收藏');
+        return;
+      }
+      _seasonId = sid;
       if (isFav) {
         Pref.removeLocalSeason(_seasonId);
         SmartDialog.showToast('已取消本地合集收藏');
