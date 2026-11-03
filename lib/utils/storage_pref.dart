@@ -676,6 +676,57 @@ abstract final class Pref {
     GlobalData().localHistoryList = [];
   }
 
+  /// 本地观看进度：null=未看，-1=已看完，>0=已看到的秒数
+  static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
+    Map? found;
+    for (final e in GlobalData().localHistoryList) {
+      final eb = e['bvid']?.toString();
+      final ea = e['aid'];
+      if (bvid != null && bvid.isNotEmpty && eb == bvid) {
+        found = e;
+        break;
+      }
+      if (aid != null && ea != null && (ea == aid || ea.toString() == '$aid')) {
+        found = e;
+        break;
+      }
+    }
+    if (found == null) return null;
+    int prog = 0;
+    final pv = found['progress'];
+    if (pv is int) {
+      prog = pv;
+    } else if (pv is num) {
+      prog = pv.toInt();
+    } else {
+      prog = int.tryParse('$pv') ?? 0;
+    }
+    int dur = duration ?? 0;
+    final dv = found['duration'];
+    if (dv is int) {
+      dur = dv;
+    } else if (dv is num) {
+      dur = dv.toInt();
+    } else {
+      final parsed = int.tryParse('$dv');
+      if (parsed != null) dur = parsed;
+    }
+    if (prog <= 0) {
+      // 有历史记录但进度为 0：仍算看过入口，标为已看（开始过）
+      return 0;
+    }
+    if (dur > 0 && prog >= (dur * 0.95).floor()) {
+      return -1;
+    }
+    return prog;
+  }
+
+  static bool isLocalWatched({int? aid, String? bvid}) {
+    return getLocalWatchProgress(aid: aid, bvid: bvid) != null;
+  }
+
+
+
   /// 本地稍后再看
   static List<Map> get localLater {
     final raw = _localCache.get(LocalCacheKey.localLater, defaultValue: <dynamic>[]);

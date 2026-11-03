@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
+import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -13,6 +14,7 @@ import 'package:PiliPlus/models_new/fav/fav_detail/media.dart';
 import 'package:PiliPlus/pages/audio/view.dart';
 import 'package:PiliPlus/pages/fav_detail/controller.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -113,6 +115,78 @@ class FavVideoCardH extends StatelessWidget {
                           width: maxWidth,
                           height: maxHeight,
                         ),
+                        // 本地观看标注：已看完 / 已看进度 / 未看
+                        if (Pref.enableLocalFeatures) ...[
+                          Builder(
+                            builder: (context) {
+                              final progress = Pref.getLocalWatchProgress(
+                                aid: item.id,
+                                bvid: item.bvid,
+                                duration: item.duration,
+                              );
+                              final duration = item.duration ?? 0;
+                              if (progress == null) {
+                                return const PBadge(
+                                  text: '未看',
+                                  left: 6.0,
+                                  top: 6.0,
+                                  type: PBadgeType.gray,
+                                );
+                              }
+                              if (progress == -1 ||
+                                  (duration > 0 && progress >= duration)) {
+                                return const PBadge(
+                                  text: '已看完',
+                                  left: 6.0,
+                                  top: 6.0,
+                                  type: PBadgeType.primary,
+                                );
+                              }
+                              if (progress > 0 && duration > 0) {
+                                return PBadge(
+                                  text:
+                                      '${DurationUtils.formatDuration(progress)}/${DurationUtils.formatDuration(duration)}',
+                                  left: 6.0,
+                                  top: 6.0,
+                                  type: PBadgeType.gray,
+                                );
+                              }
+                              return const PBadge(
+                                text: '已看',
+                                left: 6.0,
+                                top: 6.0,
+                                type: PBadgeType.primary,
+                              );
+                            },
+                          ),
+                          Builder(
+                            builder: (context) {
+                              final progress = Pref.getLocalWatchProgress(
+                                aid: item.id,
+                                bvid: item.bvid,
+                                duration: item.duration,
+                              );
+                              final duration = item.duration ?? 0;
+                              if (progress == null || duration <= 0) {
+                                return const SizedBox.shrink();
+                              }
+                              final value = progress == -1
+                                  ? 1.0
+                                  : (progress / duration).clamp(0.0, 1.0);
+                              return Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: VideoProgressIndicator(
+                                  color: colorScheme.primary,
+                                  backgroundColor:
+                                      colorScheme.secondaryContainer,
+                                  progress: value,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                         PBadge(
                           text: DurationUtils.formatDuration(item.duration),
                           right: 6.0,

@@ -362,7 +362,9 @@ class VideoDetailController extends GetxController
       int? authorMid;
       int durationSec = 0;
       int progressSec = 0;
-      if (playedTime case final t?) {
+      if (plPlayerController.playerStatus.isCompleted) {
+        progressSec = -1; // 已看完
+      } else if (playedTime case final t?) {
         progressSec = t.inSeconds;
       }
       try {
