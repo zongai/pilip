@@ -222,49 +222,68 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                           width: maxWidth,
                           height: maxHeight,
                         ),
-                        // 本地观看标注：已看完 / 已看进度 / 未看
+                        // 本地观看：图标显示已看/未看，点击切换
                         if (Pref.enableLocalFeatures) ...[
-                          Builder(
-                            builder: (context) {
-                              final progress = Pref.getLocalWatchProgress(
-                                aid: item.id,
-                                bvid: item.bvid,
-                                duration: item.duration,
-                              );
-                              final duration = item.duration ?? 0;
-                              if (progress == null) {
-                                return const PBadge(
-                                  text: '未看',
-                                  left: 6.0,
-                                  top: 6.0,
-                                  type: PBadgeType.gray,
-                                );
-                              }
-                              if (progress == -1 ||
-                                  (duration > 0 && progress >= duration)) {
-                                return const PBadge(
-                                  text: '已看完',
-                                  left: 6.0,
-                                  top: 6.0,
-                                  type: PBadgeType.primary,
-                                );
-                              }
-                              if (progress > 0 && duration > 0) {
-                                return PBadge(
-                                  text:
-                                      '${DurationUtils.formatDuration(progress)}/${DurationUtils.formatDuration(duration)}',
-                                  left: 6.0,
-                                  top: 6.0,
-                                  type: PBadgeType.gray,
-                                );
-                              }
-                              return const PBadge(
-                                text: '已看',
-                                left: 6.0,
-                                top: 6.0,
-                                type: PBadgeType.primary,
-                              );
-                            },
+                          Positioned(
+                            left: 4,
+                            top: 4,
+                            child: Material(
+                              color: Colors.black54,
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () {
+                                  final progress =
+                                      Pref.getLocalWatchProgress(
+                                    aid: item.id,
+                                    bvid: item.bvid,
+                                    duration: item.duration,
+                                  );
+                                  if (progress == null) {
+                                    Pref.markLocalWatched(
+                                      aid: item.id,
+                                      bvid: item.bvid,
+                                      title: item.title,
+                                      cover: item.cover,
+                                      authorName: item.upper?.name,
+                                      authorMid: item.upper?.mid,
+                                      duration: item.duration,
+                                      completed: true,
+                                    );
+                                    SmartDialog.showToast('已标为已看完');
+                                  } else {
+                                    Pref.markLocalUnwatched(
+                                      aid: item.id,
+                                      bvid: item.bvid,
+                                    );
+                                    SmartDialog.showToast('已标为未看');
+                                  }
+                                  if (mounted) setState(() {});
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(5),
+                                  child: Icon(
+                                    Pref.getLocalWatchProgress(
+                                              aid: item.id,
+                                              bvid: item.bvid,
+                                              duration: item.duration,
+                                            ) ==
+                                            null
+                                        ? Icons.radio_button_unchecked
+                                        : Icons.check_circle,
+                                    size: 18,
+                                    color: Pref.getLocalWatchProgress(
+                                              aid: item.id,
+                                              bvid: item.bvid,
+                                              duration: item.duration,
+                                            ) ==
+                                            null
+                                        ? Colors.white70
+                                        : colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                           Builder(
                             builder: (context) {
@@ -274,7 +293,9 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                                 duration: item.duration,
                               );
                               final duration = item.duration ?? 0;
-                              if (progress == null || duration <= 0) {
+                              if (progress == null ||
+                                  progress == 0 ||
+                                  duration <= 0) {
                                 return const SizedBox.shrink();
                               }
                               final value = progress == -1
