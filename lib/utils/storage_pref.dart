@@ -720,8 +720,16 @@ abstract final class Pref {
   }
 
   static void removeLocalHistory(String key) {
-    final list = List<Map>.from(localHistory)
-      ..removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+    final list = List<Map>.from(localHistory);
+    list.removeWhere((e) {
+      final eb = e['bvid']?.toString() ?? '';
+      final ea = e['aid'];
+      if (eb.isNotEmpty && eb == key) return true;
+      if (ea != null) {
+        if (key == 'av$ea' || key == '$ea') return true;
+      }
+      return false;
+    });
     localHistory = list;
     GlobalData().localHistoryList = list;
   }
@@ -753,12 +761,12 @@ abstract final class Pref {
       _localCache.put(LocalCacheKey.localUnwatched, set.toList());
 
   static void _addLocalUnwatched(String key) {
-    final s = localUnwatched..add(key);
+    final s = Set<String>.from(localUnwatched)..add(key);
     localUnwatched = s;
   }
 
   static void _removeLocalUnwatched(String key) {
-    final s = localUnwatched..remove(key);
+    final s = Set<String>.from(localUnwatched)..remove(key);
     localUnwatched = s;
   }
 
@@ -766,7 +774,9 @@ abstract final class Pref {
   /// 时长短于 3 分钟且未手动标未看时，默认返回 -1（已看完）
   static bool _isExplicitUnwatched({int? aid, String? bvid}) {
     final u = localUnwatched;
-    if (bvid != null && bvid.isNotEmpty && u.contains(bvid)) return true;
+    if (bvid != null && bvid.isNotEmpty) {
+      if (u.contains(bvid) || u.contains(bvid.toLowerCase())) return true;
+    }
     if (aid != null && (u.contains('av$aid') || u.contains('$aid'))) return true;
     return false;
   }
@@ -863,32 +873,39 @@ abstract final class Pref {
     );
   }
 
-  /// 手动标为未看：移除历史，并写入未看覆盖（防止短视频再次被默认已看）
+  /// 手动标为未看：清除相关历史，并持久化未看覆盖
   static void markLocalUnwatched({int? aid, String? bvid}) {
     final keys = <String>{};
-    if (bvid != null && bvid.isNotEmpty) keys.add(bvid);
+    if (bvid != null && bvid.isNotEmpty) {
+      keys.add(bvid);
+      keys.add(bvid.toLowerCase());
+    }
     if (aid != null) {
       keys.add('av$aid');
       keys.add('$aid');
     }
     if (keys.isEmpty) return;
-    for (final key in keys) {
-      removeLocalHistory(key);
-      _addLocalUnwatched(key);
-    }
-    // 再按 bvid/aid 扫一遍历史，避免 key 形式不一致残留
+
+    // 一次扫掉所有相关历史
     final list = List<Map>.from(localHistory);
     list.removeWhere((e) {
-      final eb = e['bvid']?.toString();
+      final eb = e['bvid']?.toString() ?? '';
       final ea = e['aid'];
       if (bvid != null && bvid.isNotEmpty && eb == bvid) return true;
       if (aid != null && ea != null && (ea == aid || ea.toString() == '$aid')) {
+        return true;
+      }
+      if (eb.isNotEmpty && keys.contains(eb)) return true;
+      if (ea != null && (keys.contains('av$ea') || keys.contains('$ea'))) {
         return true;
       }
       return false;
     });
     localHistory = list;
     GlobalData().localHistoryList = list;
+
+    final u = Set<String>.from(localUnwatched)..addAll(keys);
+    localUnwatched = u;
   }
 
 

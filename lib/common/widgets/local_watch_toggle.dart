@@ -63,7 +63,6 @@ class LocalWatchToggleIcon extends StatefulWidget {
   final int? duration;
   final double size;
   final EdgeInsets padding;
-  /// 状态变化后回调，便于外层刷新置灰
   final ValueChanged<bool>? onChanged;
 
   @override
@@ -71,19 +70,32 @@ class LocalWatchToggleIcon extends StatefulWidget {
 }
 
 class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
-  int? get _progress => Pref.getLocalWatchProgress(
+  /// 乐观更新，避免 Pref 异步/重建导致图标瞬间回弹
+  bool? _overrideWatched;
+
+  bool get _watchedFromPref =>
+      Pref.getLocalWatchProgress(
         aid: widget.aid,
         bvid: widget.bvid,
         duration: widget.duration,
-      );
+      ) !=
+      null;
 
-  bool get _watched => _progress != null;
+  bool get _watched => _overrideWatched ?? _watchedFromPref;
 
   void _toggle() {
-    if (!Pref.enableLocalFeatures) return;
-    final nextWatched = !_watched;
-    if (_watched) {
+    final currentlyWatched = _watched;
+    if (currentlyWatched) {
       Pref.markLocalUnwatched(aid: widget.aid, bvid: widget.bvid);
+      // 校验：若仍被判定为已看，再强制写一次覆盖
+      if (Pref.isLocalWatched(
+        aid: widget.aid,
+        bvid: widget.bvid,
+        duration: widget.duration,
+      )) {
+        Pref.markLocalUnwatched(aid: widget.aid, bvid: widget.bvid);
+      }
+      _overrideWatched = false;
       SmartDialog.showToast('已标为未看');
     } else {
       Pref.markLocalWatched(
@@ -97,10 +109,11 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
         duration: widget.duration,
         completed: true,
       );
+      _overrideWatched = true;
       SmartDialog.showToast('已标为已看完');
     }
     if (mounted) setState(() {});
-    widget.onChanged?.call(nextWatched);
+    widget.onChanged?.call(!currentlyWatched);
   }
 
   @override
@@ -108,21 +121,26 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     if (!Pref.enableLocalFeatures) return const SizedBox.shrink();
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
-    // 独立手势层，避免被外层列表 InkWell 抢走点击
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _toggle,
-      child: Material(
-        color: watched
-            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.85)
-            : Colors.black54,
-        shape: const CircleBorder(),
-        child: Padding(
-          padding: widget.padding,
-          child: Icon(
-            watched ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: widget.size,
-            color: watched ? colorScheme.primary : Colors.white,
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _toggle,
+        child: Ink(
+          decoration: BoxDecoration(
+            color: watched
+                ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.9)
+                : Colors.black54,
+            shape: BoxShape.circle,
+          ),
+          child: Padding(
+            padding: widget.padding,
+            child: Icon(
+              watched ? Icons.check_circle : Icons.radio_button_unchecked,
+              size: widget.size,
+              color: watched ? colorScheme.primary : Colors.white,
+            ),
           ),
         ),
       ),
