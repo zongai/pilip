@@ -172,7 +172,7 @@ abstract final class LocalListIo {
   }
 
   /// 单段二维码建议容量（字符）。过长手机难扫。
-  static const int qrChunkSize = 800;
+  static const int qrChunkSize = 1100;
 
   static const String qrPrefix = 'P1S'; // PiliPlus Sync
 

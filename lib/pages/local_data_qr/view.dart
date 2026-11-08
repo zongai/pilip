@@ -1,14 +1,18 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
+import 'dart:typed_data';
 
 import 'package:PiliPlus/utils/local_list_io.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
+import 'package:zxing2/qrcode.dart';
 
-/// 本地数据二维码同步：导出展示二维码，导入扫描二维码
+/// 本地数据二维码同步：导出展示二维码，导入扫描/读图/粘贴
 class LocalDataQrPage extends StatefulWidget {
   const LocalDataQrPage({super.key});
 
@@ -29,7 +33,15 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   MobileScannerController? _scanner;
   Timer? _cycleTimer;
   bool _autoCycle = true;
-  static const _cycleInterval = Duration(seconds: 2);
+  /// 加快轮播：约 1 秒一段
+  static const _cycleInterval = Duration(milliseconds: 1000);
+  final bool _isDesktop =
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  String? _cameraError;
+
+  CameraFacing _facing = Platform.isWindows || Platform.isMacOS || Platform.isLinux
+      ? CameraFacing.front
+      : CameraFacing.back;
 
   @override
   void initState() {
@@ -42,7 +54,10 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   void _onTabChanged() {
     if (_tab.index == 1) {
       _stopCycle();
-      _startScanner();
+      // 桌面端相机插件常不可用，不自动强开；用户可点「尝试打开摄像头」
+      if (!_isDesktop) {
+        _startScanner();
+      }
     } else {
       _stopScanner();
       _startCycleIfNeeded();
@@ -73,54 +88,73 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     _cycleTimer = null;
   }
 
-  CameraFacing _facing =
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux
-          ? CameraFacing.front
-          : CameraFacing.back;
-
   Future<void> _startScanner() async {
     if (_scanner != null) return;
+    setState(() => _cameraError = null);
     try {
-      // Windows：首次使用相机会走系统隐私授权；桌面默认前置摄像头
       final controller = MobileScannerController(
-        detectionSpeed: DetectionSpeed.normal,
+        detectionSpeed: DetectionSpeed.unrestricted,
         facing: _facing,
-        autoStart: true,
+        autoStart: false,
       );
       await controller.start();
       if (!mounted) {
         await controller.dispose();
         return;
       }
-      _scanner = controller;
-      setState(() => _scanning = true);
+      setState(() {
+        _scanner = controller;
+        _scanning = true;
+        _cameraError = null;
+      });
+    } on MissingPluginException catch (e) {
+      await _disposeScannerQuiet();
+      final msg = Platform.isWindows
+          ? '当前 Windows 构建未接入摄像头插件，请改用「从图片识别」或「粘贴文本」。'
+          : '本平台无相机插件实现，请使用图片识别或粘贴。';
+      if (mounted) {
+        setState(() {
+          _scanning = false;
+          _cameraError = msg;
+        });
+      }
+      SmartDialog.showToast('$msg\n($e)', displayTime: const Duration(seconds: 4));
     } catch (e) {
-      await _scanner?.dispose();
-      _scanner = null;
-      if (mounted) setState(() => _scanning = false);
+      await _disposeScannerQuiet();
       final tip = Platform.isWindows
-          ? '无法打开摄像头。请到「设置 → 隐私和安全性 → 相机」中允许桌面应用访问相机，并确认本机有可用摄像头。\n详情: $e'
+          ? '无法打开摄像头。请到「设置 → 隐私和安全性 → 相机」允许桌面应用访问相机。\n也可使用「从图片识别」。'
           : '无法启动相机: $e';
-      SmartDialog.showToast(tip, displayTime: const Duration(seconds: 5));
+      if (mounted) {
+        setState(() {
+          _scanning = false;
+          _cameraError = tip;
+        });
+      }
+      SmartDialog.showToast(tip, displayTime: const Duration(seconds: 4));
     }
   }
 
-  Future<void> _stopScanner() async {
+  Future<void> _disposeScannerQuiet() async {
     final c = _scanner;
     _scanner = null;
     try {
       await c?.stop();
     } catch (_) {}
-    await c?.dispose();
+    try {
+      await c?.dispose();
+    } catch (_) {}
+  }
+
+  Future<void> _stopScanner() async {
+    await _disposeScannerQuiet();
     if (mounted) setState(() => _scanning = false);
   }
 
   Future<void> _switchCamera() async {
     await _stopScanner();
     setState(() {
-      _facing = _facing == CameraFacing.back
-          ? CameraFacing.front
-          : CameraFacing.back;
+      _facing =
+          _facing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
     });
     await _startScanner();
   }
@@ -130,7 +164,7 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     _stopCycle();
     _tab.removeListener(_onTabChanged);
     _tab.dispose();
-    _scanner?.dispose();
+    unawaited(_disposeScannerQuiet());
     super.dispose();
   }
 
@@ -143,9 +177,9 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         .where((e) => e.isNotEmpty)
         .toList();
     if (raw.isEmpty) return;
-
     for (final text in raw) {
       await _ingestScanText(text);
+      if (_handling) break;
     }
   }
 
@@ -157,6 +191,7 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       if (text.startsWith('{')) {
         _handling = true;
         try {
+          await _stopScanner();
           final ok = await LocalListIo.importFromQrTexts(
             [text],
             replace: _replace,
@@ -166,6 +201,7 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
               _received.clear();
               _expectedTotal = null;
             });
+            SmartDialog.showToast('导入完成');
           }
         } finally {
           _handling = false;
@@ -188,9 +224,11 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     });
     SmartDialog.showToast('已扫描 ${_received.length}/$tot');
 
+    // 收齐全部段后立刻停止扫描并导入
     if (_received.length >= tot) {
       _handling = true;
       try {
+        await _stopScanner();
         final ok = await LocalListIo.importFromQrTexts(
           _received.values.toList(),
           replace: _replace,
@@ -200,10 +238,92 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
             _received.clear();
             _expectedTotal = null;
           });
+          SmartDialog.showToast('同步完成，共 $tot 段');
         }
       } finally {
         _handling = false;
       }
+    }
+  }
+
+  /// 从图片文件识别二维码（桌面主路径，不依赖相机插件）
+  Future<void> _scanFromImageFile() async {
+    try {
+      final r = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
+      );
+      if (r == null || r.files.isEmpty) return;
+      var hit = 0;
+      for (final f in r.files) {
+        final path = f.path;
+        Uint8List? bytes = f.bytes;
+        if ((bytes == null || bytes.isEmpty) && path != null) {
+          bytes = await File(path).readAsBytes();
+        }
+        if (bytes == null || bytes.isEmpty) continue;
+        final text = _decodeQrFromImageBytes(bytes);
+        if (text == null || text.isEmpty) continue;
+        hit++;
+        await _ingestScanText(text);
+        if (_handling) break;
+      }
+      if (hit == 0) {
+        SmartDialog.showToast('图片中未识别到同步二维码');
+      }
+    } catch (e) {
+      SmartDialog.showToast('读图失败: $e');
+    }
+  }
+
+  static String? _decodeQrFromImageBytes(Uint8List bytes) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+      // 过大图缩小，加快识别
+      var image = decoded;
+      const maxSide = 1200;
+      if (image.width > maxSide || image.height > maxSide) {
+        image = img.copyResize(
+          image,
+          width: image.width >= image.height ? maxSide : null,
+          height: image.height > image.width ? maxSide : null,
+        );
+      }
+      final rgba = image.convert(numChannels: 4);
+      final pixels = rgba.getBytes(order: img.ChannelOrder.rgba);
+      // zxing2 RGBLuminanceSource 期望每像素 int（可用打包 RGB）
+      final rgb = List<int>.generate(rgba.width * rgba.height, (i) {
+        final o = i * 4;
+        final r = pixels[o];
+        final g = pixels[o + 1];
+        final b = pixels[o + 2];
+        return (r << 16) | (g << 8) | b;
+      });
+      final source = RGBLuminanceSource(rgba.width, rgba.height, rgb);
+      final bitmap = BinaryBitmap(HybridBinarizer(source));
+      final result = QRCodeReader().decode(bitmap);
+      return result.text;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim();
+    if (text == null || text.isEmpty) {
+      SmartDialog.showToast('剪贴板为空');
+      return;
+    }
+    // 支持多段用换行拼接
+    final lines = text
+        .split(RegExp(r'[\r\n]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty);
+    for (final line in lines) {
+      await _ingestScanText(line);
+      if (_handling) break;
     }
   }
 
@@ -249,95 +369,58 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          '在另一台设备打开「扫描导入」，对准此二维码',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
+          '第 ${_index + 1} / ${_chunks.length} 段'
+          '${_autoCycle && _chunks.length > 1 ? ' · 自动循环' : ''}',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.titleMedium,
         ),
-        const SizedBox(height: 8),
-        Text(
-          '共 ${_chunks.length} 段 · 当前第 ${_index + 1} 段',
-          style: theme.textTheme.titleSmall,
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Center(
           child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 8,
-                ),
-              ],
-            ),
-            child: SizedBox(
-              width: 280,
-              height: 280,
-              child: PrettyQrView.data(
-                data: chunk,
-                decoration: const PrettyQrDecoration(
-                  shape: PrettyQrSquaresSymbol(),
-                ),
+            padding: const EdgeInsets.all(12),
+            color: Colors.white,
+            child: PrettyQrView.data(
+              data: chunk,
+              decoration: const PrettyQrDecoration(
+                shape: PrettyQrSmoothSymbol(),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton.filledTonal(
-              onPressed: _chunks.length > 1
-                  ? () {
-                      setState(() {
-                        _index = (_index - 1 + _chunks.length) % _chunks.length;
-                      });
-                    }
-                  : null,
-              icon: const Icon(Icons.chevron_left),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                '${_index + 1} / ${_chunks.length}'
-                '${_autoCycle && _chunks.length > 1 ? ' · 自动循环' : ''}',
+        const SizedBox(height: 12),
+        if (_chunks.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _index = (_index - 1 + _chunks.length) % _chunks.length;
+                  });
+                },
+                icon: const Icon(Icons.chevron_left),
               ),
-            ),
-            IconButton.filledTonal(
-              onPressed: _chunks.length > 1
-                  ? () {
-                      setState(() {
-                        _index = (_index + 1) % _chunks.length;
-                      });
-                    }
-                  : null,
-              icon: const Icon(Icons.chevron_right),
-            ),
-          ],
-        ),
-        if (_chunks.length > 1) ...[
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('自动循环显示'),
-            subtitle: const Text('约每 2 秒切换下一段，便于对方连续扫描'),
-            value: _autoCycle,
-            onChanged: (v) {
-              setState(() => _autoCycle = v);
-              if (v) {
-                _startCycleIfNeeded();
-              } else {
-                _stopCycle();
-              }
-            },
+              TextButton(
+                onPressed: () {
+                  setState(() => _autoCycle = !_autoCycle);
+                  _startCycleIfNeeded();
+                },
+                child: Text(_autoCycle ? '暂停循环' : '自动循环'),
+              ),
+              IconButton(
+                onPressed: () {
+                  setState(() {
+                    _index = (_index + 1) % _chunks.length;
+                  });
+                },
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
           ),
-        ],
         const SizedBox(height: 8),
         Text(
-          '数据较多时会分成多段，开启自动循环后对方可持续扫描。',
+          '对端用「扫描导入」或「从图片识别」依次读取；段数越少同步越快。',
+          textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
           ),
@@ -347,23 +430,56 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   }
 
   Widget _buildImport(ThemeData theme) {
-    final total = _expectedTotal;
+    final total = _expectedTotal ?? 0;
     return Column(
       children: [
-        SwitchListTile(
-          title: const Text('覆盖导入'),
-          subtitle: const Text('关闭则与现有数据合并'),
-          value: _replace,
-          onChanged: (v) => setState(() => _replace = v),
-        ),
-        if (total != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('分段进度：${_received.length} / $total'),
-                const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('导入时覆盖已有数据'),
+                subtitle: const Text('关闭则为合并'),
+                value: _replace,
+                onChanged: (v) => setState(() => _replace = v),
+              ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _scanFromImageFile,
+                    icon: const Icon(Icons.image_outlined),
+                    label: const Text('从图片识别'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _pasteFromClipboard,
+                    icon: const Icon(Icons.paste),
+                    label: const Text('粘贴文本'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _scanning ? _stopScanner : _startScanner,
+                    icon: Icon(
+                      _scanning ? Icons.videocam_off : Icons.photo_camera,
+                    ),
+                    label: Text(_scanning ? '关闭摄像头' : '尝试打开摄像头'),
+                  ),
+                ],
+              ),
+              if (_cameraError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _cameraError!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              if (total > 0) ...[
+                const SizedBox(height: 8),
+                Text('进度：${_received.length}/$total'),
                 LinearProgressIndicator(
                   value: total == 0 ? 0 : _received.length / total,
                 ),
@@ -378,36 +494,22 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
                   ),
                 ),
               ],
-            ),
+            ],
           ),
+        ),
         Expanded(
           child: _scanner == null
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.videocam_off_outlined, size: 48),
-                        const SizedBox(height: 12),
-                        const Text('相机未就绪'),
-                        const SizedBox(height: 12),
-                        FilledButton.icon(
-                          onPressed: _startScanner,
-                          icon: const Icon(Icons.photo_camera),
-                          label: const Text('启动扫描'),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          Platform.isWindows
-                              ? 'Windows 需在「设置 → 隐私和安全性 → 相机」中允许桌面应用访问相机；首次打开时系统可能会弹出授权提示。'
-                              : '请允许应用使用摄像头以扫描二维码。',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      _isDesktop
+                          ? 'Windows / 桌面推荐：对端导出页截图或拍照保存图片，点「从图片识别」选图即可。\n也可粘贴同步文本；摄像头依赖系统插件，可能不可用。'
+                          : '将摄像头对准导出端二维码；收齐全部段后会自动停止并导入。',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
                     ),
                   ),
                 )
