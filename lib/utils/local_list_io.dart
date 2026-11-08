@@ -1,20 +1,30 @@
 import 'dart:convert';
-import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:PiliPlus/utils/global_data.dart';
+import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/storage_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
-/// 本地数据 JSON 导入导出（关注 / 黑名单 / 播单 / 历史 / 稍后再看）
+/// 本地数据 JSON 导入导出（一次性打包全部）
 abstract final class LocalListIo {
   static const followType = 'pilip_local_follows';
   static const playlistType = 'pilip_local_playlists';
   static const blacklistType = 'pilip_local_blacklist';
   static const historyType = 'pilip_local_history';
   static const laterType = 'pilip_local_later';
+  static const allType = 'pilip_local_all';
+  static const searchHistoryType = 'pilip_search_history';
+
+  static const _searchCacheKey = 'cacheList';
+
+  static List<String> get searchHistoryList {
+    final raw = GStorage.historyWord.get(_searchCacheKey);
+    if (raw is! List) return <String>[];
+    return [for (final e in raw) if ('$e'.trim().isNotEmpty) '$e'];
+  }
 
   static Future<void> export({
     required String type,
@@ -36,8 +46,62 @@ abstract final class LocalListIo {
     );
   }
 
-  /// 返回解析出的 items；失败返回 null。items 可为 Map 或数字（黑名单 mid）
+  static Future<void> exportPayload({
+    required Map<String, dynamic> payload,
+    required String fileName,
+  }) async {
+    final json = const JsonEncoder.withIndent('  ').convert(payload);
+    final bytes = Uint8List.fromList(utf8.encode(json));
+    await StorageUtils.saveBytes2File(name: fileName, bytes: bytes);
+  }
+
+  /// 返回解析出的 items；失败返回 null
   static Future<List?> import({required String expectedType}) async {
+    final decoded = await _pickJson();
+    if (decoded == null) return null;
+    if (decoded is Map) {
+      final t = decoded['type'];
+      if (t != null && t != expectedType && t != allType) {
+        SmartDialog.showToast('文件类型不匹配（期望 $expectedType）');
+        return null;
+      }
+      // 全部包里的单项
+      if (t == allType && expectedType != allType) {
+        final data = decoded['data'];
+        if (data is! Map) {
+          SmartDialog.showToast('无效的备份文件');
+          return null;
+        }
+        final key = switch (expectedType) {
+          followType => 'follows',
+          blacklistType => 'blacklist',
+          playlistType => 'playlists',
+          historyType => 'history',
+          laterType => 'later',
+          searchHistoryType => 'searchHistory',
+          _ => null,
+        };
+        if (key == null) return null;
+        final items = data[key];
+        if (items is! List) {
+          SmartDialog.showToast('备份中无对应数据');
+          return null;
+        }
+        return items;
+      }
+      final items = decoded['items'] ?? decoded['mids'] ?? decoded['data'];
+      if (items is! List) {
+        SmartDialog.showToast('无效的备份文件');
+        return null;
+      }
+      return items;
+    }
+    if (decoded is List) return decoded;
+    SmartDialog.showToast('无效的备份文件');
+    return null;
+  }
+
+  static Future<dynamic> _pickJson() async {
     try {
       final result = await FilePicker.pickFile(
         type: .custom,
@@ -48,27 +112,7 @@ abstract final class LocalListIo {
         return null;
       }
       final String data = await result.xFile.readAsString();
-      final dynamic decoded = jsonDecode(data);
-      List rawItems;
-      if (decoded is Map) {
-        final t = decoded['type'];
-        if (t != null && t != expectedType) {
-          SmartDialog.showToast('文件类型不匹配（期望 $expectedType）');
-          return null;
-        }
-        final items = decoded['items'] ?? decoded['mids'] ?? decoded['data'];
-        if (items is! List) {
-          SmartDialog.showToast('无效的备份文件');
-          return null;
-        }
-        rawItems = items;
-      } else if (decoded is List) {
-        rawItems = decoded;
-      } else {
-        SmartDialog.showToast('无效的备份文件');
-        return null;
-      }
-      return rawItems;
+      return jsonDecode(data);
     } catch (e) {
       SmartDialog.showToast('导入失败: $e');
       return null;
@@ -89,7 +133,361 @@ abstract final class LocalListIo {
         .toList();
   }
 
-  // ---------- 关注 ----------
+  static List<String> _asStrings(List raw) {
+    return [
+      for (final e in raw)
+        if ('$e'.trim().isNotEmpty) '$e'.trim(),
+    ];
+  }
+
+  // ---------- 全部（一次导出/导入）----------
+  static Map<String, dynamic> _collectAll() {
+    return {
+      'follows': Pref.localFollows,
+      'blacklist': Pref.blackMids.map((mid) => {'mid': mid}).toList(),
+      'playlists': Pref.localPlaylists,
+      'videoPlaylists': Pref.localVideoPlaylists,
+      'seasons': Pref.localSeasons,
+      'history': Pref.localHistory,
+      'later': Pref.localLater,
+      'searchHistory': searchHistoryList,
+      'favHideKeywords': Pref.favHideKeywords,
+    };
+  }
+
+  static Future<void> exportAll() async {
+    final data = _collectAll();
+    final counts = {
+      for (final e in data.entries)
+        e.key: e.value is List ? (e.value as List).length : 0,
+    };
+    await exportPayload(
+      fileName: 'pilip_all_${DateTime.now().millisecondsSinceEpoch}.json',
+      payload: {
+        'type': allType,
+        'version': 2,
+        'exportedAt': DateTime.now().toIso8601String(),
+        'counts': counts,
+        'data': data,
+      },
+    );
+  }
+
+  static Future<void> importAll({bool replace = false}) async {
+    final decoded = await _pickJson();
+    if (decoded == null) return;
+
+    Map? data;
+    if (decoded is Map) {
+      final t = decoded['type'];
+      if (t == allType) {
+        final d = decoded['data'];
+        if (d is Map) {
+          data = d;
+        }
+      } else if (decoded['data'] is Map) {
+        data = decoded['data'] as Map;
+      } else {
+        // 兼容旧单类型文件：按 type 单项导入
+        await _importLegacySingle(decoded, replace: replace);
+        return;
+      }
+    }
+    if (data == null) {
+      SmartDialog.showToast('无效的全部备份文件');
+      return;
+    }
+
+    final parts = <String>[];
+
+    void applyMaps(
+      String key,
+      String label,
+      void Function(List<Map>, {required bool replace}) apply,
+    ) {
+      final raw = data![key];
+      if (raw is! List || raw.isEmpty) return;
+      final items = _asMaps(raw);
+      if (items.isEmpty) return;
+      apply(items, replace: replace);
+      parts.add('$label ${items.length}');
+    }
+
+    applyMaps('follows', '关注', (items, {required replace}) {
+      if (replace) {
+        Pref.replaceLocalFollows(items);
+      } else {
+        Pref.mergeLocalFollows(items);
+      }
+    });
+
+    final bl = data['blacklist'];
+    if (bl is List && bl.isNotEmpty) {
+      final mids = <int>{};
+      for (final e in bl) {
+        if (e is int) {
+          mids.add(e);
+        } else if (e is num) {
+          mids.add(e.toInt());
+        } else if (e is Map) {
+          final m = e['mid'];
+          if (m is int) {
+            mids.add(m);
+          } else if (m is num) {
+            mids.add(m.toInt());
+          } else {
+            final n = int.tryParse('$m');
+            if (n != null) mids.add(n);
+          }
+        } else {
+          final n = int.tryParse('$e');
+          if (n != null) mids.add(n);
+        }
+      }
+      if (mids.isNotEmpty) {
+        if (replace) {
+          Pref.blackMids = mids;
+          GlobalData().blackMids = mids;
+        } else {
+          final next = {...Pref.blackMids, ...mids};
+          Pref.blackMids = next;
+          GlobalData().blackMids = next;
+        }
+        parts.add('黑名单 ${mids.length}');
+      }
+    }
+
+    applyMaps('playlists', '播单', (items, {required replace}) {
+      if (replace) {
+        Pref.replaceLocalPlaylists(items);
+      } else {
+        Pref.mergeLocalPlaylists(items);
+      }
+    });
+
+    // 本地视频播放列表
+    final vpls = data['videoPlaylists'];
+    if (vpls is List && vpls.isNotEmpty) {
+      final items = _asMaps(vpls);
+      if (items.isNotEmpty) {
+        if (replace) {
+          Pref.localVideoPlaylists = items;
+        } else {
+          final cur = List<Map>.from(Pref.localVideoPlaylists);
+          final byId = <dynamic, Map>{
+            for (final e in cur)
+              if (e['id'] != null) e['id']: Map<String, dynamic>.from(e),
+          };
+          for (final e in items) {
+            final id = e['id'];
+            if (id != null && byId.containsKey(id)) {
+              byId[id] = e;
+            } else if (id != null) {
+              byId[id] = e;
+            } else {
+              cur.add(e);
+            }
+          }
+          Pref.localVideoPlaylists = [
+            ...byId.values,
+            ...cur.where((e) => e['id'] == null),
+          ];
+        }
+        parts.add('视频播单 ${items.length}');
+      }
+    }
+
+    final seasons = data['seasons'];
+    if (seasons is List && seasons.isNotEmpty) {
+      final items = _asMaps(seasons);
+      if (items.isNotEmpty) {
+        if (replace) {
+          Pref.localSeasons = items;
+          GlobalData().localSeasonList = items;
+          GlobalData().localSeasonIds = {
+            for (final e in items)
+              if (e['id'] is int) e['id'] as int,
+          };
+        } else {
+          final cur = List<Map>.from(Pref.localSeasons);
+          final ids = {
+            for (final e in cur)
+              if (e['id'] != null) e['id'],
+          };
+          for (final e in items) {
+            final id = e['id'];
+            if (id != null && ids.contains(id)) {
+              final i = cur.indexWhere((x) => x['id'] == id);
+              if (i >= 0) cur[i] = e;
+            } else {
+              cur.add(e);
+              if (id != null) ids.add(id);
+            }
+          }
+          Pref.localSeasons = cur;
+          GlobalData().localSeasonList = cur;
+          GlobalData().localSeasonIds = {
+            for (final e in cur)
+              if (e['id'] is int) e['id'] as int,
+          };
+        }
+        parts.add('合集 ${items.length}');
+      }
+    }
+
+    applyMaps('history', '历史', (items, {required replace}) {
+      if (replace) {
+        Pref.replaceLocalHistory(items);
+      } else {
+        Pref.mergeLocalHistory(items);
+      }
+    });
+
+    applyMaps('later', '稍后再看', (items, {required replace}) {
+      if (replace) {
+        Pref.replaceLocalLater(items);
+      } else {
+        Pref.mergeLocalLater(items);
+      }
+    });
+
+    final sh = data['searchHistory'];
+    if (sh is List && sh.isNotEmpty) {
+      final words = _asStrings(sh);
+      if (words.isNotEmpty) {
+        if (replace) {
+          GStorage.historyWord.put(_searchCacheKey, words);
+        } else {
+          final cur = searchHistoryList;
+          final seen = cur.toSet();
+          final merged = [...cur];
+          for (final w in words) {
+            if (seen.add(w)) merged.add(w);
+          }
+          GStorage.historyWord.put(_searchCacheKey, merged);
+        }
+        parts.add('搜索历史 ${words.length}');
+      }
+    }
+
+    final kws = data['favHideKeywords'];
+    if (kws is List && kws.isNotEmpty) {
+      final words = _asStrings(kws);
+      if (words.isNotEmpty) {
+        if (replace) {
+          Pref.favHideKeywords = words;
+        } else {
+          for (final w in words) {
+            Pref.addFavHideKeyword(w);
+          }
+        }
+        parts.add('隐藏关键字 ${words.length}');
+      }
+    }
+
+    if (parts.isEmpty) {
+      SmartDialog.showToast('备份中无可导入数据');
+    } else {
+      SmartDialog.showToast(
+        '${replace ? '已覆盖' : '已合并'}导入：${parts.join(' · ')}',
+      );
+    }
+  }
+
+  static Future<void> _importLegacySingle(
+    Map decoded, {
+    required bool replace,
+  }) async {
+    final t = decoded['type'];
+    final items = decoded['items'] ?? decoded['mids'] ?? decoded['data'];
+    if (items is! List) {
+      SmartDialog.showToast('无效的备份文件');
+      return;
+    }
+    switch (t) {
+      case followType:
+        final maps = _asMaps(items);
+        if (replace) {
+          Pref.replaceLocalFollows(maps);
+        } else {
+          Pref.mergeLocalFollows(maps);
+        }
+        SmartDialog.showToast('已导入关注 ${maps.length}');
+      case blacklistType:
+        final mids = <int>{};
+        for (final e in items) {
+          if (e is int) {
+            mids.add(e);
+          } else if (e is num) {
+            mids.add(e.toInt());
+          } else if (e is Map) {
+            final m = e['mid'];
+            if (m is int) {
+              mids.add(m);
+            } else if (m is num) {
+              mids.add(m.toInt());
+            } else {
+              final n = int.tryParse('$m');
+              if (n != null) mids.add(n);
+            }
+          } else {
+            final n = int.tryParse('$e');
+            if (n != null) mids.add(n);
+          }
+        }
+        if (replace) {
+          Pref.blackMids = mids;
+          GlobalData().blackMids = mids;
+        } else {
+          final next = {...Pref.blackMids, ...mids};
+          Pref.blackMids = next;
+          GlobalData().blackMids = next;
+        }
+        SmartDialog.showToast('已导入黑名单 ${mids.length}');
+      case playlistType:
+        final maps = _asMaps(items);
+        if (replace) {
+          Pref.replaceLocalPlaylists(maps);
+        } else {
+          Pref.mergeLocalPlaylists(maps);
+        }
+        SmartDialog.showToast('已导入播单 ${maps.length}');
+      case historyType:
+        final maps = _asMaps(items);
+        if (replace) {
+          Pref.replaceLocalHistory(maps);
+        } else {
+          Pref.mergeLocalHistory(maps);
+        }
+        SmartDialog.showToast('已导入历史 ${maps.length}');
+      case laterType:
+        final maps = _asMaps(items);
+        if (replace) {
+          Pref.replaceLocalLater(maps);
+        } else {
+          Pref.mergeLocalLater(maps);
+        }
+        SmartDialog.showToast('已导入稍后再看 ${maps.length}');
+      case searchHistoryType:
+        final words = _asStrings(items);
+        if (replace) {
+          GStorage.historyWord.put(_searchCacheKey, words);
+        } else {
+          final cur = searchHistoryList;
+          final seen = cur.toSet();
+          final merged = [...cur];
+          for (final w in words) {
+            if (seen.add(w)) merged.add(w);
+          }
+          GStorage.historyWord.put(_searchCacheKey, merged);
+        }
+        SmartDialog.showToast('已导入搜索历史 ${words.length}');
+      default:
+        SmartDialog.showToast('无法识别的备份类型');
+    }
+  }
+
+  // ---------- 单项（兼容）----------
   static Future<void> exportFollows() => export(
         type: followType,
         fileName: 'pilip_follows_${DateTime.now().millisecondsSinceEpoch}.json',
@@ -109,7 +507,6 @@ abstract final class LocalListIo {
     }
   }
 
-  // ---------- 黑名单 ----------
   static Future<void> exportBlacklist() {
     final items = Pref.blackMids.map((mid) => {'mid': mid}).toList();
     return export(
@@ -129,24 +526,31 @@ abstract final class LocalListIo {
       } else if (e is num) {
         mids.add(e.toInt());
       } else if (e is Map) {
-        final m = e['mid'] ?? e['id'];
-        final id = m is int ? m : int.tryParse('$m');
-        if (id != null && id != 0) mids.add(id);
+        final m = e['mid'];
+        if (m is int) {
+          mids.add(m);
+        } else if (m is num) {
+          mids.add(m.toInt());
+        } else {
+          final n = int.tryParse('$m');
+          if (n != null) mids.add(n);
+        }
       } else {
-        final id = int.tryParse('$e');
-        if (id != null && id != 0) mids.add(id);
+        final n = int.tryParse('$e');
+        if (n != null) mids.add(n);
       }
     }
     if (replace) {
-      Pref.replaceBlackMids(mids);
-      SmartDialog.showToast('已覆盖导入 ${mids.length} 个黑名单');
+      Pref.blackMids = mids;
+      GlobalData().blackMids = mids;
     } else {
-      Pref.mergeBlackMids(mids);
-      SmartDialog.showToast('已合并导入 ${mids.length} 个黑名单');
+      final next = {...Pref.blackMids, ...mids};
+      Pref.blackMids = next;
+      GlobalData().blackMids = next;
     }
+    SmartDialog.showToast('${replace ? '覆盖' : '合并'}导入黑名单 ${mids.length}');
   }
 
-  // ---------- 播放列表 ----------
   static Future<void> exportPlaylists() => export(
         type: playlistType,
         fileName:
@@ -160,14 +564,13 @@ abstract final class LocalListIo {
     final items = _asMaps(raw);
     if (replace) {
       Pref.replaceLocalPlaylists(items);
-      SmartDialog.showToast('已覆盖导入 ${items.length} 个播放列表');
+      SmartDialog.showToast('已覆盖导入 ${items.length} 条播放列表');
     } else {
       Pref.mergeLocalPlaylists(items);
-      SmartDialog.showToast('已合并导入 ${items.length} 个播放列表');
+      SmartDialog.showToast('已合并导入 ${items.length} 条播放列表');
     }
   }
 
-  // ---------- 历史 ----------
   static Future<void> exportHistory() => export(
         type: historyType,
         fileName: 'pilip_history_${DateTime.now().millisecondsSinceEpoch}.json',
@@ -187,7 +590,6 @@ abstract final class LocalListIo {
     }
   }
 
-  // ---------- 稍后再看 ----------
   static Future<void> exportLater() => export(
         type: laterType,
         fileName: 'pilip_later_${DateTime.now().millisecondsSinceEpoch}.json',
@@ -205,5 +607,30 @@ abstract final class LocalListIo {
       Pref.mergeLocalLater(items);
       SmartDialog.showToast('已合并导入 ${items.length} 条稍后再看');
     }
+  }
+
+  static Future<void> exportSearchHistory() => export(
+        type: searchHistoryType,
+        fileName:
+            'pilip_search_history_${DateTime.now().millisecondsSinceEpoch}.json',
+        items: searchHistoryList,
+      );
+
+  static Future<void> importSearchHistory({bool replace = false}) async {
+    final raw = await import(expectedType: searchHistoryType);
+    if (raw == null) return;
+    final words = _asStrings(raw);
+    if (replace) {
+      GStorage.historyWord.put(_searchCacheKey, words);
+    } else {
+      final cur = searchHistoryList;
+      final seen = cur.toSet();
+      final merged = [...cur];
+      for (final w in words) {
+        if (seen.add(w)) merged.add(w);
+      }
+      GStorage.historyWord.put(_searchCacheKey, merged);
+    }
+    SmartDialog.showToast('${replace ? '覆盖' : '合并'}导入搜索历史 ${words.length}');
   }
 }
