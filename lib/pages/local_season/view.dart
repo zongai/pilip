@@ -2,14 +2,13 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/utils/global_data.dart';
-import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 本地合集收藏（无需登录），按窗口宽度自适应列表/网格
+/// 本地合集收藏：始终用固定高度卡片，避免 ListView 无界高度下 AspectRatio/Spacer 把条目压成 0
 class LocalSeasonPage extends StatefulWidget {
   const LocalSeasonPage({super.key});
 
@@ -30,6 +29,13 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
     setState(() {
       _list = List<Map>.from(GlobalData().localSeasonList);
     });
+  }
+
+  static int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('$v');
   }
 
   void _unfav(int id, String title) {
@@ -58,8 +64,11 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
   }
 
   void _openSeason(Map item) {
-    final id = item['id'];
-    if (id == null) return;
+    final id = _asInt(item['id']);
+    if (id == null) {
+      SmartDialog.showToast('无法识别合集 ID');
+      return;
+    }
     Get.toNamed(
       '/subDetail',
       arguments: {
@@ -98,7 +107,7 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
                     Text('暂无合集收藏', style: theme.textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
-                      '在合集选集面板点击「订阅」即可添加\n加入后可在此管理，无需登录',
+                      '在合集选集面板点击「订阅」即可添加\n加入后可在此管理',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.outline,
@@ -110,30 +119,33 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                // 窄屏单列；≥600 起多列，桌面/平板更宽时列数随 maxCrossAxisExtent 自动增加
-                final useGrid = width >= 600;
-                final padding = EdgeInsets.only(
-                  left: width >= 1000 ? 24 : 0,
-                  right: width >= 1000 ? 24 : 0,
-                  bottom: bottom + 24,
-                );
-
-                if (!useGrid) {
-                  return ListView.builder(
-                    padding: padding,
-                    itemCount: _list.length,
-                    itemBuilder: (context, index) =>
-                        _SeasonCard(item: _list[index], onOpen: _openSeason, onUnfav: _unfav),
-                  );
-                }
-
-                return GridView.builder(
-                  padding: padding,
-                  gridDelegate: Grid.videoCardHDelegate(mainAxisExtent: 120),
+                final maxW = constraints.maxWidth;
+                final list = ListView.separated(
+                  padding: EdgeInsets.only(
+                    left: maxW >= 1000 ? 24 : 0,
+                    right: maxW >= 1000 ? 24 : 0,
+                    bottom: bottom + 24,
+                  ),
                   itemCount: _list.length,
-                  itemBuilder: (context, index) =>
-                      _SeasonCard(item: _list[index], onOpen: _openSeason, onUnfav: _unfav),
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _list[index];
+                    return _SeasonCard(
+                      item: item,
+                      onOpen: _openSeason,
+                      onUnfav: _unfav,
+                    );
+                  },
+                );
+                if (maxW < 720) return list;
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: maxW >= 1200 ? 960 : 720,
+                    ),
+                    child: list,
+                  ),
                 );
               },
             ),
@@ -152,104 +164,104 @@ class _SeasonCard extends StatelessWidget {
   final void Function(Map item) onOpen;
   final void Function(int id, String title) onUnfav;
 
+  static int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('$v');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final id = item['id'] as int? ?? 0;
+    final id = _asInt(item['id']) ?? 0;
     final title = (item['title'] as String?)?.isNotEmpty == true
         ? item['title'] as String
         : '合集 $id';
-    final cover = item['cover'] as String?;
-    final mediaCount = item['mediaCount'];
+    final cover = item['cover']?.toString();
+    final mediaCount = _asInt(item['mediaCount']);
     final upperName = (item['upperName'] as String?)?.trim() ?? '';
-    final countText = mediaCount is int && mediaCount > 0 ? '$mediaCount 集' : null;
+    final countText =
+        mediaCount != null && mediaCount > 0 ? '$mediaCount 集' : null;
 
+    // 固定高度，避免 ListView 子项无界高度导致封面/文字高度为 0
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () => onOpen(item),
-        onLongPress: () => onUnfav(id, title),
-        onSecondaryTap: PlatformUtils.isMobile ? null : () => onUnfav(id, title),
+        onLongPress: id == 0 ? null : () => onUnfav(id, title),
+        onSecondaryTap: PlatformUtils.isMobile || id == 0
+            ? null
+            : () => onUnfav(id, title),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Style.safeSpace,
-            vertical: 6,
+            vertical: 8,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, box) {
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        NetworkImgLayer(
-                          src: cover,
-                          width: box.maxWidth,
-                          height: box.maxHeight,
-                        ),
-                        if (countText != null)
-                          PBadge(
-                            text: countText,
-                            bottom: 6,
-                            right: 6,
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.35,
+          child: SizedBox(
+            height: 72,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Stack(
+                    children: [
+                      NetworkImgLayer(
+                        src: cover,
+                        width: 120,
+                        height: 72,
                       ),
-                    ),
-                    if (upperName.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        upperName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.colorScheme.outline,
+                      if (countText != null)
+                        PBadge(
+                          text: countText,
+                          bottom: 4,
+                          right: 4,
                         ),
-                      ),
                     ],
-                    const Spacer(),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        tooltip: '取消收藏',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        icon: Icon(
-                          Icons.notifications_off_outlined,
-                          color: theme.colorScheme.outline,
-                        ),
-                        onPressed: () => onUnfav(id, title),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (upperName.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          upperName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: '取消收藏',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  icon: Icon(
+                    Icons.star,
+                    color: theme.colorScheme.primary,
+                  ),
+                  onPressed: id == 0 ? null : () => onUnfav(id, title),
+                ),
+              ],
+            ),
           ),
         ),
       ),

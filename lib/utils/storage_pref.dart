@@ -200,6 +200,14 @@ abstract final class Pref {
     GlobalData().localFollowList = list;
   }
 
+
+  static int _mapId(dynamic v) {
+    if (v == null) return -1;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    return int.tryParse('$v') ?? -1;
+  }
+
   /// 本地合集收藏 [{id, title, cover, mediaCount, mid, upperName}, ...]
   static List<Map> get localSeasons {
     final raw = _localCache.get(LocalCacheKey.localSeasons, defaultValue: <dynamic>[]);
@@ -228,7 +236,7 @@ abstract final class Pref {
     final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
     if (id == null) return;
     final list = List<Map>.from(localSeasons);
-    final idx = list.indexWhere((e) => e['id'] == id);
+    final idx = list.indexWhere((e) => _mapId(e['id']) == id);
     final item = {
       'id': id,
       'title': title ?? (idx >= 0 ? list[idx]['title'] : null) ?? '',
@@ -250,7 +258,13 @@ abstract final class Pref {
   static void removeLocalSeason(dynamic seasonId) {
     final id = seasonId is int ? seasonId : int.tryParse('$seasonId');
     if (id == null) return;
-    final list = List<Map>.from(localSeasons)..removeWhere((e) => e['id'] == id);
+    final list = List<Map>.from(localSeasons)
+      ..removeWhere((e) {
+        final eid = e['id'];
+        if (eid is int) return eid == id;
+        if (eid is num) return eid.toInt() == id;
+        return int.tryParse('$eid') == id;
+      });
     localSeasons = list;
     GlobalData().localSeasonIds.remove(id);
     GlobalData().localSeasonList = list;
