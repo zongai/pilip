@@ -33,9 +33,28 @@ class _LocalPlaylistPageState extends State<LocalPlaylistPage> {
   }
 
   void _remove(int mediaId, String title) {
-    Pref.removeLocalPlaylist(mediaId);
-    SmartDialog.showToast('已取消收藏「$title」');
-    _refresh();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('取消收藏'),
+        content: Text('确定取消收藏「$title」？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('再想想'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Pref.removeLocalPlaylist(mediaId);
+              SmartDialog.showToast('已取消收藏「$title」');
+              _refresh();
+            },
+            child: const Text('确定取消'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 点击直接进入播放列表详情

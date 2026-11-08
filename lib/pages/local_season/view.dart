@@ -33,9 +33,28 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
   }
 
   void _unfav(int id, String title) {
-    Pref.removeLocalSeason(id);
-    SmartDialog.showToast('已取消收藏 $title');
-    _refresh();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('取消收藏'),
+        content: Text('确定取消收藏「$title」？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('再想想'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Pref.removeLocalSeason(id);
+              SmartDialog.showToast('已取消收藏 $title');
+              _refresh();
+            },
+            child: const Text('确定取消'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openSeason(Map item) {

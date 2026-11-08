@@ -758,6 +758,24 @@ class _EpisodePanelState extends State<EpisodePanel>
       }
       _seasonId = sid;
       if (isFav) {
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('取消收藏'),
+            content: const Text('确定取消该合集收藏？'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('再想想'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('确定取消'),
+              ),
+            ],
+          ),
+        );
+        if (ok != true) return;
         Pref.removeLocalSeason(_seasonId);
         SmartDialog.showToast('已取消本地合集收藏');
       } else {
