@@ -249,15 +249,10 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   /// 从图片文件识别二维码（桌面主路径，不依赖相机插件）
   Future<void> _scanFromImageFile() async {
     try {
-      // file_picker 13：用 pickFile；多图可多次选择
       final f = await FilePicker.pickFile(type: FileType.image);
       if (f == null) return;
-      Uint8List? bytes = f.bytes;
-      final path = f.path;
-      if ((bytes == null || bytes.isEmpty) && path != null) {
-        bytes = await File(path).readAsBytes();
-      }
-      if (bytes == null || bytes.isEmpty) {
+      final bytes = await f.xFile.readAsBytes();
+      if (bytes.isEmpty) {
         SmartDialog.showToast('无法读取图片');
         return;
       }
