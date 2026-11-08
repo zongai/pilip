@@ -122,17 +122,21 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _toggle,
-      child: Material(
-        color: watched
-            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.9)
-            : Colors.black54,
-        shape: const CircleBorder(),
-        elevation: 2,
-        child: Padding(
-          padding: widget.padding,
+    // 固定命中区域，避免已看置灰后点不到
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _toggle,
+        child: Ink(
+          width: widget.size + widget.padding.horizontal,
+          height: widget.size + widget.padding.vertical,
+          decoration: BoxDecoration(
+            color: watched
+                ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.95)
+                : Colors.black54,
+            shape: BoxShape.circle,
+          ),
           child: Icon(
             watched ? Icons.check_circle : Icons.radio_button_unchecked,
             size: widget.size,

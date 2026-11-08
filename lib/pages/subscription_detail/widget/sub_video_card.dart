@@ -89,41 +89,23 @@ class _SubVideoCardHState extends State<SubVideoCardH> {
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    // 封面点击打开视频（与已看图标分离）
+                    // 仅封面置灰，不含手势（避免 ColorFiltered/整卡手势干扰图标）
+                    LocalWatchDim(
+                      watched: watched,
+                      child: NetworkImgLayer(
+                        src: videoItem.cover,
+                        width: maxWidth,
+                        height: maxHeight,
+                      ),
+                    ),
+                    // 封面打开视频：translucent，不抢子组件点击
                     Positioned.fill(
                       child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
+                        behavior: HitTestBehavior.translucent,
                         onTap: _open,
                         onLongPress: _onLongPress,
                         onSecondaryTap:
                             PlatformUtils.isMobile ? null : _onLongPress,
-                        child: LocalWatchDim(
-                          watched: watched,
-                          child: NetworkImgLayer(
-                            src: videoItem.cover,
-                            width: maxWidth,
-                            height: maxHeight,
-                          ),
-                        ),
-                      ),
-                    ),
-                    // 已看图标：独立手势，置于最上层
-                    Positioned(
-                      left: 2,
-                      top: 2,
-                      child: LocalWatchToggleIcon(
-                        aid: videoItem.id,
-                        bvid: videoItem.bvid,
-                        title: videoItem.title,
-                        cover: videoItem.cover,
-                        duration: videoItem.duration,
-                        size: 20,
-                        padding: const EdgeInsets.all(6),
-                        onChanged: (nowWatched) {
-                          if (mounted) {
-                            setState(() => _watchedOverride = nowWatched);
-                          }
-                        },
                       ),
                     ),
                     LocalWatchProgressBar(
@@ -139,6 +121,25 @@ class _SubVideoCardHState extends State<SubVideoCardH> {
                         right: 6.0,
                         bottom: 6.0,
                         type: PBadgeType.gray,
+                      ),
+                    ),
+                    // 图标必须在 Stack 最后，保证已看置灰后仍可点
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: LocalWatchToggleIcon(
+                        aid: videoItem.id,
+                        bvid: videoItem.bvid,
+                        title: videoItem.title,
+                        cover: videoItem.cover,
+                        duration: videoItem.duration,
+                        size: 22,
+                        padding: const EdgeInsets.all(8),
+                        onChanged: (nowWatched) {
+                          if (mounted) {
+                            setState(() => _watchedOverride = nowWatched);
+                          }
+                        },
                       ),
                     ),
                   ],
