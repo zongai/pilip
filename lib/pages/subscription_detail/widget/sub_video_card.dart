@@ -15,7 +15,7 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 合集/订阅视频卡片：已看置灰弱化，未看保持醒目
+/// 合集/订阅视频卡片：已看置灰弱化；已看图标独立手势，不被整卡点击拦截
 class SubVideoCardH extends StatefulWidget {
   final SubDetailItemModel videoItem;
   final int? searchType;
@@ -33,61 +33,71 @@ class SubVideoCardH extends StatefulWidget {
 class _SubVideoCardHState extends State<SubVideoCardH> {
   SubDetailItemModel get videoItem => widget.videoItem;
 
-  bool get _watched =>
-      Pref.enableLocalFeatures &&
-      Pref.isLocalWatched(
-        aid: videoItem.id,
+  /// 本地覆盖，保证点取消已看后立刻刷新置灰
+  bool? _watchedOverride;
+
+  bool get _watched {
+    if (_watchedOverride != null) return _watchedOverride!;
+    return Pref.enableLocalFeatures &&
+        Pref.isLocalWatched(
+          aid: videoItem.id,
+          bvid: videoItem.bvid,
+          duration: videoItem.duration,
+        );
+  }
+
+  Future<void> _open() async {
+    final res = await SearchHttp.ab2cWithDimension(bvid: videoItem.bvid);
+    final cid = res?.cid;
+    if (cid != null) {
+      PageUtils.toVideoPage(
         bvid: videoItem.bvid,
-        duration: videoItem.duration,
+        cid: cid,
+        cover: videoItem.cover,
+        title: videoItem.title,
+        dimension: res!.dimension,
+      );
+    }
+  }
+
+  void _onLongPress() => imageSaveDialog(
+        title: videoItem.title,
+        cover: videoItem.cover,
+        bvid: videoItem.bvid,
       );
 
   @override
   Widget build(BuildContext context) {
     final watched = _watched;
     final outline = Theme.of(context).colorScheme.outline;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    void onLongPress() => imageSaveDialog(
-          title: videoItem.title,
-          cover: videoItem.cover,
-          bvid: videoItem.bvid,
-        );
-
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: () async {
-          final res = await SearchHttp.ab2cWithDimension(bvid: videoItem.bvid);
-          final cid = res?.cid;
-          if (cid != null) {
-            PageUtils.toVideoPage(
-              bvid: videoItem.bvid,
-              cid: cid,
-              cover: videoItem.cover,
-              title: videoItem.title,
-              dimension: res!.dimension,
-            );
-          }
-        },
-        onLongPress: onLongPress,
-        onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Style.safeSpace,
-            vertical: 5,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, boxConstraints) {
-                    final maxWidth = boxConstraints.maxWidth;
-                    final maxHeight = boxConstraints.maxHeight;
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        LocalWatchDim(
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Style.safeSpace,
+        vertical: 5,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: Style.aspectRatio,
+            child: LayoutBuilder(
+              builder: (context, boxConstraints) {
+                final maxWidth = boxConstraints.maxWidth;
+                final maxHeight = boxConstraints.maxHeight;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 封面点击打开视频（与已看图标分离）
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _open,
+                        onLongPress: _onLongPress,
+                        onSecondaryTap:
+                            PlatformUtils.isMobile ? null : _onLongPress,
+                        child: LocalWatchDim(
                           watched: watched,
                           child: NetworkImgLayer(
                             src: videoItem.cover,
@@ -95,87 +105,95 @@ class _SubVideoCardHState extends State<SubVideoCardH> {
                             height: maxHeight,
                           ),
                         ),
-                        // 图标始终保持清晰可点，不被置灰
-                        Positioned(
-                          left: 4,
-                          top: 4,
-                          child: LocalWatchToggleIcon(
-                            aid: videoItem.id,
-                            bvid: videoItem.bvid,
-                            title: videoItem.title,
-                            cover: videoItem.cover,
-                            duration: videoItem.duration,
-                            onChanged: (_) {
-                              if (mounted) setState(() {});
-                            },
-                          ),
+                      ),
+                    ),
+                    // 已看图标：独立手势，置于最上层
+                    Positioned(
+                      left: 2,
+                      top: 2,
+                      child: LocalWatchToggleIcon(
+                        aid: videoItem.id,
+                        bvid: videoItem.bvid,
+                        title: videoItem.title,
+                        cover: videoItem.cover,
+                        duration: videoItem.duration,
+                        size: 20,
+                        padding: const EdgeInsets.all(6),
+                        onChanged: (nowWatched) {
+                          if (mounted) {
+                            setState(() => _watchedOverride = nowWatched);
+                          }
+                        },
+                      ),
+                    ),
+                    LocalWatchProgressBar(
+                      aid: videoItem.id,
+                      bvid: videoItem.bvid,
+                      duration: videoItem.duration,
+                    ),
+                    LocalWatchDim(
+                      watched: watched,
+                      opacity: 0.65,
+                      child: PBadge(
+                        text: DurationUtils.formatDuration(videoItem.duration),
+                        right: 6.0,
+                        bottom: 6.0,
+                        type: PBadgeType.gray,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _open,
+              onLongPress: _onLongPress,
+              onSecondaryTap: PlatformUtils.isMobile ? null : _onLongPress,
+              child: LocalWatchDim(
+                watched: watched,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        videoItem.title!,
+                        textAlign: TextAlign.start,
+                        style: TextStyle(
+                          letterSpacing: 0.3,
+                          color: watched ? outline : null,
                         ),
-                        LocalWatchProgressBar(
-                          aid: videoItem.id,
-                          bvid: videoItem.bvid,
-                          duration: videoItem.duration,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      DateFormatUtils.dateFormat(videoItem.pubtime),
+                      style: TextStyle(fontSize: 12, color: outline),
+                    ),
+                    const SizedBox(height: 3),
+                    Row(
+                      spacing: 8,
+                      children: [
+                        StatWidget(
+                          type: StatType.play,
+                          value: videoItem.cntInfo?.play,
                         ),
-                        LocalWatchDim(
-                          watched: watched,
-                          opacity: 0.65,
-                          child: PBadge(
-                            text: DurationUtils.formatDuration(
-                              videoItem.duration,
-                            ),
-                            right: 6.0,
-                            bottom: 6.0,
-                            type: PBadgeType.gray,
-                          ),
+                        StatWidget(
+                          type: StatType.danmaku,
+                          value: videoItem.cntInfo?.danmaku,
                         ),
                       ],
-                    );
-                  },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: LocalWatchDim(
-                  watched: watched,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          videoItem.title!,
-                          textAlign: TextAlign.start,
-                          style: TextStyle(
-                            letterSpacing: 0.3,
-                            color: watched ? outline : null,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        DateFormatUtils.dateFormat(videoItem.pubtime),
-                        style: TextStyle(fontSize: 12, color: outline),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        spacing: 8,
-                        children: [
-                          StatWidget(
-                            type: StatType.play,
-                            value: videoItem.cntInfo?.play,
-                          ),
-                          StatWidget(
-                            type: StatType.danmaku,
-                            value: videoItem.cntInfo?.danmaku,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

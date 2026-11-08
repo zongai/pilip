@@ -44,6 +44,7 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
   int? get index => widget.index;
   BaseFavController? get ctr => widget.ctr;
   bool get isSort => ctr == null;
+  bool? _watchedOverride;
 
   void _onTap() {
     // 0/4/16/...: 正常；9: up自己删除；1: 其他原因删除
@@ -165,12 +166,13 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
     final isOwner = !isSort && ctr!.isOwner;
     late final enableMultiSelect = ctr?.enableMultiSelect.value ?? false;
     final colorScheme = ColorScheme.of(context);
-    final watched = Pref.enableLocalFeatures &&
-        Pref.isLocalWatched(
-          aid: item.id,
-          bvid: item.bvid,
-          duration: item.duration,
-        );
+    final watched = _watchedOverride ??
+        (Pref.enableLocalFeatures &&
+            Pref.isLocalWatched(
+              aid: item.id,
+              bvid: item.bvid,
+              duration: item.duration,
+            ));
 
     void openImageSave() => imageSaveDialog(
           title: item.title,
@@ -231,30 +233,12 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                             height: maxHeight,
                           ),
                         ),
-                        // 图标始终清晰可点
-                        if (Pref.enableLocalFeatures) ...[
-                          Positioned(
-                            left: 4,
-                            top: 4,
-                            child: LocalWatchToggleIcon(
-                              aid: item.id,
-                              bvid: item.bvid,
-                              title: item.title,
-                              cover: item.cover,
-                              authorName: item.upper?.name,
-                              authorMid: item.upper?.mid,
-                              duration: item.duration,
-                              onChanged: (_) {
-                                if (mounted) setState(() {});
-                              },
-                            ),
-                          ),
+                        if (Pref.enableLocalFeatures)
                           LocalWatchProgressBar(
                             aid: item.id,
                             bvid: item.bvid,
                             duration: item.duration,
                           ),
-                        ],
                         PBadge(
                           text: DurationUtils.formatDuration(item.duration),
                           right: 6.0,
@@ -278,9 +262,35 @@ class _FavVideoCardHState extends State<FavVideoCardH> {
                           ),
                         if (!isSort)
                           Positioned.fill(
-                            child: selectMask(
-                              colorScheme,
-                              item.checked,
+                            child: IgnorePointer(
+                              // 非多选时不拦截封面/已看图标点击
+                              ignoring: !enableMultiSelect,
+                              child: selectMask(
+                                colorScheme,
+                                item.checked,
+                              ),
+                            ),
+                          ),
+                        // 已看图标放最上层，避免被 selectMask / 外层 InkWell 挡住
+                        if (Pref.enableLocalFeatures)
+                          Positioned(
+                            left: 2,
+                            top: 2,
+                            child: LocalWatchToggleIcon(
+                              aid: item.id,
+                              bvid: item.bvid,
+                              title: item.title,
+                              cover: item.cover,
+                              authorName: item.upper?.name,
+                              authorMid: item.upper?.mid,
+                              duration: item.duration,
+                              size: 20,
+                              padding: const EdgeInsets.all(6),
+                              onChanged: (nowWatched) {
+                                if (mounted) {
+                                  setState(() => _watchedOverride = nowWatched);
+                                }
+                              },
                             ),
                           ),
                       ],

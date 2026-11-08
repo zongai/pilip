@@ -122,25 +122,21 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: _toggle,
-        child: Ink(
-          decoration: BoxDecoration(
-            color: watched
-                ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.9)
-                : Colors.black54,
-            shape: BoxShape.circle,
-          ),
-          child: Padding(
-            padding: widget.padding,
-            child: Icon(
-              watched ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: widget.size,
-              color: watched ? colorScheme.primary : Colors.white,
-            ),
+    // Listener 优先命中，避免被外层列表手势抢走（尤其 Windows）
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerUp: (_) => _toggle(),
+      child: Material(
+        color: watched
+            ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.9)
+            : Colors.black54,
+        shape: const CircleBorder(),
+        child: Padding(
+          padding: widget.padding,
+          child: Icon(
+            watched ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: widget.size,
+            color: watched ? colorScheme.primary : Colors.white,
           ),
         ),
       ),
