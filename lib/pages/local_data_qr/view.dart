@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:flutter/services.dart';
@@ -72,25 +73,56 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     _cycleTimer = null;
   }
 
+  CameraFacing _facing =
+      Platform.isWindows || Platform.isMacOS || Platform.isLinux
+          ? CameraFacing.front
+          : CameraFacing.back;
+
   Future<void> _startScanner() async {
     if (_scanner != null) return;
     try {
-      _scanner = MobileScannerController(
+      // Windows：首次使用相机会走系统隐私授权；桌面默认前置摄像头
+      final controller = MobileScannerController(
         detectionSpeed: DetectionSpeed.normal,
-        facing: CameraFacing.back,
+        facing: _facing,
+        autoStart: true,
       );
+      await controller.start();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      _scanner = controller;
       setState(() => _scanning = true);
     } catch (e) {
-      SmartDialog.showToast('无法启动相机: $e');
-      setState(() => _scanning = false);
+      await _scanner?.dispose();
+      _scanner = null;
+      if (mounted) setState(() => _scanning = false);
+      final tip = Platform.isWindows
+          ? '无法打开摄像头。请到「设置 → 隐私和安全性 → 相机」中允许桌面应用访问相机，并确认本机有可用摄像头。\n详情: $e'
+          : '无法启动相机: $e';
+      SmartDialog.showToast(tip, displayTime: const Duration(seconds: 5));
     }
   }
 
   Future<void> _stopScanner() async {
     final c = _scanner;
     _scanner = null;
+    try {
+      await c?.stop();
+    } catch (_) {}
     await c?.dispose();
     if (mounted) setState(() => _scanning = false);
+  }
+
+  Future<void> _switchCamera() async {
+    await _stopScanner();
+    setState(() {
+      _facing = _facing == CameraFacing.back
+          ? CameraFacing.front
+          : CameraFacing.back;
+    });
+    await _startScanner();
   }
 
   @override
@@ -351,31 +383,51 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         Expanded(
           child: _scanner == null
               ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('相机未就绪'),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: _startScanner,
-                        child: const Text('启动扫描'),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '桌面端若无摄像头，请使用手机扫描另一台设备的导出二维码',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.videocam_off_outlined, size: 48),
+                        const SizedBox(height: 12),
+                        const Text('相机未就绪'),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: _startScanner,
+                          icon: const Icon(Icons.photo_camera),
+                          label: const Text('启动扫描'),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Text(
+                          Platform.isWindows
+                              ? 'Windows 需在「设置 → 隐私和安全性 → 相机」中允许桌面应用访问相机；首次打开时系统可能会弹出授权提示。'
+                              : '请允许应用使用摄像头以扫描二维码。',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 )
-              : ClipRect(
-                  child: MobileScanner(
-                    controller: _scanner,
-                    onDetect: _onDetect,
-                  ),
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MobileScanner(
+                      controller: _scanner,
+                      onDetect: _onDetect,
+                    ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: FloatingActionButton.small(
+                        tooltip: '切换摄像头',
+                        onPressed: _switchCamera,
+                        child: const Icon(Icons.cameraswitch_outlined),
+                      ),
+                    ),
+                  ],
                 ),
         ),
       ],
