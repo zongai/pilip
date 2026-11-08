@@ -1,18 +1,15 @@
 import 'dart:async';
-import 'dart:io' show File, Platform;
-import 'dart:typed_data';
+import 'dart:io' show Platform;
 
 import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:image/image.dart' as img;
 import 'package:material_ui/material_ui.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
-import 'package:zxing2/qrcode.dart';
+import 'package:universal_barcode_scanner/universal_barcode_scanner.dart';
 
-/// 本地数据二维码同步：导出展示二维码，导入扫描/读图/粘贴
+/// 本地数据二维码同步：导出展示二维码；导入用 universal_barcode_scanner（含 Windows 摄像头）
 class LocalDataQrPage extends StatefulWidget {
   const LocalDataQrPage({super.key});
 
@@ -30,18 +27,11 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   bool _replace = false;
   bool _scanning = false;
   bool _handling = false;
-  MobileScannerController? _scanner;
+  ScannerController? _scannerCtrl;
   Timer? _cycleTimer;
   bool _autoCycle = true;
-  /// 加快轮播：约 1 秒一段
   static const _cycleInterval = Duration(milliseconds: 1000);
-  final bool _isDesktop =
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
   String? _cameraError;
-
-  CameraFacing _facing = Platform.isWindows || Platform.isMacOS || Platform.isLinux
-      ? CameraFacing.front
-      : CameraFacing.back;
 
   @override
   void initState() {
@@ -54,10 +44,6 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   void _onTabChanged() {
     if (_tab.index == 1) {
       _stopCycle();
-      // 桌面端相机插件常不可用，不自动强开；用户可点「尝试打开摄像头」
-      if (!_isDesktop) {
-        _startScanner();
-      }
     } else {
       _stopScanner();
       _startCycleIfNeeded();
@@ -88,75 +74,21 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     _cycleTimer = null;
   }
 
-  Future<void> _startScanner() async {
-    if (_scanner != null) return;
-    setState(() => _cameraError = null);
-    try {
-      final controller = MobileScannerController(
-        detectionSpeed: DetectionSpeed.unrestricted,
-        facing: _facing,
-        autoStart: false,
-      );
-      await controller.start();
-      if (!mounted) {
-        await controller.dispose();
-        return;
-      }
-      setState(() {
-        _scanner = controller;
-        _scanning = true;
-        _cameraError = null;
-      });
-    } on MissingPluginException catch (e) {
-      await _disposeScannerQuiet();
-      final msg = Platform.isWindows
-          ? '当前 Windows 构建未接入摄像头插件，请改用「从图片识别」或「粘贴文本」。'
-          : '本平台无相机插件实现，请使用图片识别或粘贴。';
-      if (mounted) {
-        setState(() {
-          _scanning = false;
-          _cameraError = msg;
-        });
-      }
-      SmartDialog.showToast('$msg\n($e)', displayTime: const Duration(seconds: 4));
-    } catch (e) {
-      await _disposeScannerQuiet();
-      final tip = Platform.isWindows
-          ? '无法打开摄像头。请到「设置 → 隐私和安全性 → 相机」允许桌面应用访问相机。\n也可使用「从图片识别」。'
-          : '无法启动相机: $e';
-      if (mounted) {
-        setState(() {
-          _scanning = false;
-          _cameraError = tip;
-        });
-      }
-      SmartDialog.showToast(tip, displayTime: const Duration(seconds: 4));
-    }
-  }
-
-  Future<void> _disposeScannerQuiet() async {
-    final c = _scanner;
-    _scanner = null;
-    try {
-      await c?.stop();
-    } catch (_) {}
-    try {
-      await c?.dispose();
-    } catch (_) {}
-  }
-
-  Future<void> _stopScanner() async {
-    await _disposeScannerQuiet();
-    if (mounted) setState(() => _scanning = false);
-  }
-
-  Future<void> _switchCamera() async {
-    await _stopScanner();
+  void _startScanner() {
     setState(() {
-      _facing =
-          _facing == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
+      _cameraError = null;
+      _scanning = true;
     });
-    await _startScanner();
+  }
+
+  void _stopScanner() {
+    try {
+      _scannerCtrl?.pauseScanning();
+    } catch (_) {}
+    _scannerCtrl = null;
+    if (mounted) {
+      setState(() => _scanning = false);
+    }
   }
 
   @override
@@ -164,34 +96,20 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     _stopCycle();
     _tab.removeListener(_onTabChanged);
     _tab.dispose();
-    unawaited(_disposeScannerQuiet());
+    _scannerCtrl = null;
     super.dispose();
   }
 
-  Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_handling) return;
-    final raw = capture.barcodes
-        .map((e) => e.rawValue)
-        .whereType<String>()
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    if (raw.isEmpty) return;
-    for (final text in raw) {
-      await _ingestScanText(text);
-      if (_handling) break;
-    }
-  }
-
   Future<void> _ingestScanText(String text) async {
-    if (_handling) return;
+    text = text.trim();
+    if (text.isEmpty || _handling) return;
 
     // 完整 JSON
     if (!text.startsWith('${LocalListIo.qrPrefix}|')) {
       if (text.startsWith('{')) {
         _handling = true;
         try {
-          await _stopScanner();
+          _stopScanner();
           final ok = await LocalListIo.importFromQrTexts(
             [text],
             replace: _replace,
@@ -224,11 +142,10 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     });
     SmartDialog.showToast('已扫描 ${_received.length}/$tot');
 
-    // 收齐全部段后立刻停止扫描并导入
     if (_received.length >= tot) {
       _handling = true;
       try {
-        await _stopScanner();
+        _stopScanner();
         final ok = await LocalListIo.importFromQrTexts(
           _received.values.toList(),
           replace: _replace,
@@ -246,7 +163,6 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     }
   }
 
-  /// 从图片文件识别二维码（桌面主路径，不依赖相机插件）
   Future<void> _scanFromImageFile() async {
     try {
       final f = await FilePicker.pickFile(type: FileType.image);
@@ -256,48 +172,24 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         SmartDialog.showToast('无法读取图片');
         return;
       }
-      final text = _decodeQrFromImageBytes(bytes);
-      if (text == null || text.isEmpty) {
+      final codes = await UniversalBarcodeScanner.scanImage(
+        bytes,
+        scanFormat: ScanFormat.onlyQrCode,
+      );
+      if (codes.isEmpty) {
         SmartDialog.showToast('图片中未识别到同步二维码');
         return;
       }
-      await _ingestScanText(text);
+      for (final c in codes) {
+        final text = c.text.trim();
+        if (text.isEmpty) continue;
+        await _ingestScanText(text);
+        if (_handling) break;
+      }
+    } on ScannerException catch (e) {
+      SmartDialog.showToast('读图失败: ${e.message ?? e.code}');
     } catch (e) {
       SmartDialog.showToast('读图失败: $e');
-    }
-  }
-
-  static String? _decodeQrFromImageBytes(Uint8List bytes) {
-    try {
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return null;
-      // 过大图缩小，加快识别
-      var image = decoded;
-      const maxSide = 1200;
-      if (image.width > maxSide || image.height > maxSide) {
-        image = img.copyResize(
-          image,
-          width: image.width >= image.height ? maxSide : null,
-          height: image.height > image.width ? maxSide : null,
-        );
-      }
-      final rgba = image.convert(numChannels: 4);
-      final pixels = rgba.getBytes(order: img.ChannelOrder.rgba);
-      // zxing2 RGBLuminanceSource 期望每像素 int（可用打包 RGB）
-      final rgb = Int32List(rgba.width * rgba.height);
-      for (var i = 0; i < rgb.length; i++) {
-        final o = i * 4;
-        final r = pixels[o];
-        final g = pixels[o + 1];
-        final b = pixels[o + 2];
-        rgb[i] = (r << 16) | (g << 8) | b;
-      }
-      final source = RGBLuminanceSource(rgba.width, rgba.height, rgb);
-      final bitmap = BinaryBitmap(HybridBinarizer(source));
-      final result = QRCodeReader().decode(bitmap);
-      return result.text;
-    } catch (_) {
-      return null;
     }
   }
 
@@ -308,7 +200,6 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       SmartDialog.showToast('剪贴板为空');
       return;
     }
-    // 支持多段用换行拼接
     final lines = text
         .split(RegExp(r'[\r\n]+'))
         .map((e) => e.trim())
@@ -455,17 +346,24 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
                     icon: const Icon(Icons.paste),
                     label: const Text('粘贴文本'),
                   ),
-                  // mobile_scanner 官方不支持 Windows/Linux，避免点了报 MissingPluginException
-                  if (!_isDesktop || Platform.isMacOS)
-                    OutlinedButton.icon(
-                      onPressed: _scanning ? _stopScanner : _startScanner,
-                      icon: Icon(
-                        _scanning ? Icons.videocam_off : Icons.photo_camera,
-                      ),
-                      label: Text(_scanning ? '关闭摄像头' : '打开摄像头'),
+                  OutlinedButton.icon(
+                    onPressed: _scanning ? _stopScanner : _startScanner,
+                    icon: Icon(
+                      _scanning ? Icons.videocam_off : Icons.photo_camera,
                     ),
+                    label: Text(_scanning ? '关闭摄像头' : '打开摄像头'),
+                  ),
                 ],
               ),
+              if (_cameraError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _cameraError!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
               if (total > 0) ...[
                 const SizedBox(height: 8),
                 Text('进度：${_received.length}/$total'),
@@ -487,38 +385,53 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
           ),
         ),
         Expanded(
-          child: _scanner == null
-              ? Center(
+          child: _scanning
+              ? UniversalBarcodeScanner(
+                  onCreated: (ctrl) {
+                    _scannerCtrl = ctrl;
+                  },
+                  continuous: true,
+                  scanDelay: const Duration(milliseconds: 400),
+                  scanWindow: ScanWindow.square,
+                  cameraFace: Platform.isWindows ||
+                          Platform.isMacOS ||
+                          Platform.isLinux
+                      ? CameraFace.front
+                      : CameraFace.back,
+                  scanFormat: ScanFormat.onlyQrCode,
+                  buttons: const {
+                    ScannerButton.torch,
+                    ScannerButton.switchCamera,
+                  },
+                  onScanned: (code) {
+                    unawaited(_ingestScanText(code));
+                  },
+                  onError: (e) {
+                    if (!mounted) return;
+                    final msg = e.message ?? '${e.code}';
+                    setState(() {
+                      _cameraError = msg;
+                      _scanning = false;
+                    });
+                    SmartDialog.showToast(
+                      '摄像头: $msg',
+                      displayTime: const Duration(seconds: 4),
+                    );
+                  },
+                )
+              : Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      Platform.isWindows || Platform.isLinux
-                          ? 'Windows 不支持摄像头扫码。\n请对导出端二维码截图，点「从图片识别」选图；或使用「粘贴文本」。\n收齐全部段后会自动导入。'
-                          : '将摄像头对准导出端二维码；收齐全部段后会自动停止并导入。也可从图片识别。',
+                      '打开摄像头对准导出端二维码；收齐全部段后自动导入。\n'
+                      '也可用「从图片识别」选截图，或「粘贴文本」。\n'
+                      'Windows 需已安装 WebView2（Win11 / 新版 Edge 通常自带）。',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
                     ),
                   ),
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MobileScanner(
-                      controller: _scanner,
-                      onDetect: _onDetect,
-                    ),
-                    Positioned(
-                      right: 12,
-                      bottom: 12,
-                      child: FloatingActionButton.small(
-                        tooltip: '切换摄像头',
-                        onPressed: _switchCamera,
-                        child: const Icon(Icons.cameraswitch_outlined),
-                      ),
-                    ),
-                  ],
                 ),
         ),
       ],

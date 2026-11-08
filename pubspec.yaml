@@ -149,9 +149,7 @@ dependencies:
   permission_handler_apple: ^9.4.7
   permission_handler_platform_interface: ^4.4.0
   pretty_qr_code: ^3.3.0
-  mobile_scanner: ^6.0.2
-  zxing2: ^0.2.3
-  image: ^4.5.4
+  universal_barcode_scanner: ^2.3.0
   protobuf: ^6.0.0
   re_highlight: ^0.0.3
   saver_gallery: ^5.0.2
