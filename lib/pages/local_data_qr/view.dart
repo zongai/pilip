@@ -377,12 +377,16 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         const SizedBox(height: 12),
         Center(
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             color: Colors.white,
-            child: PrettyQrView.data(
-              data: chunk,
-              decoration: const PrettyQrDecoration(
-                shape: PrettyQrSmoothSymbol(),
+            child: SizedBox(
+              width: 360,
+              height: 360,
+              child: PrettyQrView.data(
+                data: chunk,
+                decoration: const PrettyQrDecoration(
+                  shape: PrettyQrSmoothSymbol(roundFactor: 0),
+                ),
               ),
             ),
           ),
