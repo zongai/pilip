@@ -32,6 +32,14 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   bool _autoCycle = true;
   static const _cycleInterval = Duration(milliseconds: 1000);
   String? _cameraError;
+  int _scannerGen = 0;
+  /// 桌面 WebView 首次常黑屏，自动重建一次以出画
+  bool _needWarmup = false;
+  late CameraFace _cameraFace = Platform.isWindows ||
+          Platform.isMacOS ||
+          Platform.isLinux
+      ? CameraFace.front
+      : CameraFace.back;
 
   @override
   void initState() {
@@ -78,6 +86,9 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     setState(() {
       _cameraError = null;
       _scanning = true;
+      _scannerGen++;
+      // Windows/Linux WebView2 首次挂载常无画面，需二次初始化
+      _needWarmup = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
     });
   }
 
@@ -86,9 +97,26 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       _scannerCtrl?.pauseScanning();
     } catch (_) {}
     _scannerCtrl = null;
+    _needWarmup = false;
     if (mounted) {
       setState(() => _scanning = false);
     }
+  }
+
+  Future<void> _onScannerCreated(ScannerController ctrl) async {
+    _scannerCtrl = ctrl;
+    // 给 WebView/原生视图一点时间挂载流
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    if (!mounted || _scannerCtrl != ctrl) return;
+    try {
+      await ctrl.resumeScanning();
+    } catch (_) {}
+    if (!_needWarmup || !mounted) return;
+    _needWarmup = false;
+    // 同镜头重建一次（等价于用户切换后再切回，能触发出画）
+    setState(() {
+      _scannerGen++;
+    });
   }
 
   @override
@@ -387,18 +415,21 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         Expanded(
           child: _scanning
               ? UniversalBarcodeScanner(
+                  key: ValueKey('ubs_$_scannerGen'),
                   onCreated: (ctrl) {
-                    _scannerCtrl = ctrl;
+                    unawaited(_onScannerCreated(ctrl));
                   },
                   continuous: true,
-                  scanDelay: const Duration(milliseconds: 400),
+                  scanDelay: const Duration(milliseconds: 350),
                   scanWindow: ScanWindow.square,
-                  cameraFace: Platform.isWindows ||
+                  cameraFace: _cameraFace,
+                  scanFormat: ScanFormat.onlyQrCode,
+                  // 桌面默认镜像更符合自拍摄像头；手机用默认
+                  flip: Platform.isWindows ||
                           Platform.isMacOS ||
                           Platform.isLinux
-                      ? CameraFace.front
-                      : CameraFace.back,
-                  scanFormat: ScanFormat.onlyQrCode,
+                      ? true
+                      : null,
                   buttons: const {
                     ScannerButton.torch,
                     ScannerButton.switchCamera,
@@ -411,7 +442,10 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
                     final msg = e.message ?? '${e.code}';
                     setState(() {
                       _cameraError = msg;
-                      _scanning = false;
+                      // 首次失败不立刻关掉，便于用户点切换镜头
+                      if (!_needWarmup) {
+                        _scanning = false;
+                      }
                     });
                     SmartDialog.showToast(
                       '摄像头: $msg',
