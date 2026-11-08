@@ -74,7 +74,7 @@ List<SettingsModel> get privacySettings => [
         Get.toNamed('/localDataQrPage');
       },
       title: '二维码同步',
-      subtitle: '用二维码在多设备间同步本地数据',
+      subtitle: '导出显示二维码，导入扫描二维码',
       leading: const Icon(Icons.qr_code_2_outlined),
     ),
     NormalModel(
@@ -83,7 +83,7 @@ List<SettingsModel> get privacySettings => [
       },
       title: '本地数据导入导出',
       subtitle:
-          '全部数据一次导入导出（含搜索历史）',
+          'JSON 文件导入导出（含搜索历史）',
       leading: const Icon(Icons.import_export),
     ),
   ],
@@ -155,16 +155,17 @@ void _showLocalDataIoSheet(BuildContext context) {
               ListTile(
                 leading: const Icon(Icons.qr_code_2),
                 title: const Text('二维码同步'),
-                subtitle: const Text('展示/粘贴二维码内容进行多端同步'),
+                subtitle: const Text('导出显示二维码，导入扫描二维码'),
                 onTap: () {
                   Navigator.pop(context);
                   Get.toNamed('/localDataQrPage');
                 },
               ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.upload_outlined),
-                title: const Text('全部导出'),
-                subtitle: const Text('打包为单个 JSON 文件'),
+                title: const Text('文件导出'),
+                subtitle: const Text('打包为 JSON 文件保存'),
                 onTap: () {
                   Navigator.pop(context);
                   LocalListIo.exportAll();
@@ -172,8 +173,8 @@ void _showLocalDataIoSheet(BuildContext context) {
               ),
               ListTile(
                 leading: const Icon(Icons.download_outlined),
-                title: const Text('全部导入（合并）'),
-                subtitle: const Text('与现有数据合并，不删除旧数据'),
+                title: const Text('文件导入（合并）'),
+                subtitle: const Text('选择 JSON 文件，与现有数据合并'),
                 onTap: () {
                   Navigator.pop(context);
                   LocalListIo.importAll();
@@ -181,8 +182,8 @@ void _showLocalDataIoSheet(BuildContext context) {
               ),
               ListTile(
                 leading: const Icon(Icons.download),
-                title: const Text('全部导入（覆盖）'),
-                subtitle: const Text('用备份替换对应类别数据'),
+                title: const Text('文件导入（覆盖）'),
+                subtitle: const Text('选择 JSON 文件，覆盖对应数据'),
                 onTap: () {
                   Navigator.pop(context);
                   LocalListIo.importAll(replace: true);

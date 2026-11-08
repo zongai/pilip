@@ -2,9 +2,10 @@ import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 
-/// 本地数据二维码多端同步
+/// 本地数据二维码同步：导出展示二维码，导入扫描二维码
 class LocalDataQrPage extends StatefulWidget {
   const LocalDataQrPage({super.key});
 
@@ -17,15 +18,24 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   late final TabController _tab = TabController(length: 2, vsync: this);
   List<String> _chunks = const [];
   int _index = 0;
-  final _pasteCtrl = TextEditingController();
   final _received = <int, String>{};
   int? _expectedTotal;
   bool _replace = false;
+  bool _scanning = false;
+  bool _handling = false;
+  MobileScannerController? _scanner;
 
   @override
   void initState() {
     super.initState();
     _rebuildChunks();
+    _tab.addListener(() {
+      if (_tab.index == 1) {
+        _startScanner();
+      } else {
+        _stopScanner();
+      }
+    });
   }
 
   void _rebuildChunks() {
@@ -35,60 +45,104 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
     });
   }
 
+  Future<void> _startScanner() async {
+    if (_scanner != null) return;
+    try {
+      _scanner = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+      );
+      setState(() => _scanning = true);
+    } catch (e) {
+      SmartDialog.showToast('无法启动相机: $e');
+      setState(() => _scanning = false);
+    }
+  }
+
+  Future<void> _stopScanner() async {
+    final c = _scanner;
+    _scanner = null;
+    await c?.dispose();
+    if (mounted) setState(() => _scanning = false);
+  }
+
   @override
   void dispose() {
     _tab.dispose();
-    _pasteCtrl.dispose();
+    _scanner?.dispose();
     super.dispose();
   }
 
-  Future<void> _importTexts(List<String> texts) async {
-    final ok = await LocalListIo.importFromQrTexts(
-      texts,
-      replace: _replace,
-    );
-    if (ok && mounted) {
-      setState(() {
-        _received.clear();
-        _expectedTotal = null;
-        _pasteCtrl.clear();
-      });
-    }
-  }
-
-  void _ingestPasted(String text) {
-    final lines = text
-        .split(RegExp(r'[\n\r]+'))
+  Future<void> _onDetect(BarcodeCapture capture) async {
+    if (_handling) return;
+    final raw = capture.barcodes
+        .map((e) => e.rawValue)
+        .whereType<String>()
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    if (lines.isEmpty) {
-      SmartDialog.showToast('请粘贴同步内容');
+    if (raw.isEmpty) return;
+
+    for (final text in raw) {
+      await _ingestScanText(text);
+    }
+  }
+
+  Future<void> _ingestScanText(String text) async {
+    if (_handling) return;
+
+    // 完整 JSON
+    if (!text.startsWith('${LocalListIo.qrPrefix}|')) {
+      if (text.startsWith('{')) {
+        _handling = true;
+        try {
+          final ok = await LocalListIo.importFromQrTexts(
+            [text],
+            replace: _replace,
+          );
+          if (ok && mounted) {
+            setState(() {
+              _received.clear();
+              _expectedTotal = null;
+            });
+          }
+        } finally {
+          _handling = false;
+        }
+      }
       return;
     }
-    // 单段完整或 JSON
-    if (lines.length == 1 && !lines.first.startsWith('${LocalListIo.qrPrefix}|')) {
-      _importTexts(lines);
-      return;
-    }
-    for (final line in lines) {
-      if (!line.startsWith('${LocalListIo.qrPrefix}|')) continue;
-      final segs = line.split('|');
-      if (segs.length < 4) continue;
-      final idx = int.tryParse(segs[1]);
-      final tot = int.tryParse(segs[2]);
-      if (idx == null || tot == null) continue;
+
+    final segs = text.split('|');
+    if (segs.length < 4) return;
+    final idx = int.tryParse(segs[1]);
+    final tot = int.tryParse(segs[2]);
+    if (idx == null || tot == null) return;
+
+    if (_received.containsKey(idx)) return;
+
+    setState(() {
       _expectedTotal = tot;
-      _received[idx] = line;
-    }
-    setState(() {});
-    final total = _expectedTotal ?? 0;
-    if (total > 0 && _received.length >= total) {
-      _importTexts(_received.values.toList());
-    } else if (total > 0) {
-      SmartDialog.showToast('已收 ${_received.length}/$total 段，请继续粘贴');
-    } else {
-      _importTexts(lines);
+      _received[idx] = text;
+    });
+    SmartDialog.showToast('已扫描 ${_received.length}/$tot');
+
+    if (_received.length >= tot) {
+      _handling = true;
+      try {
+        final ok = await LocalListIo.importFromQrTexts(
+          _received.values.toList(),
+          replace: _replace,
+        );
+        if (ok && mounted) {
+          setState(() {
+            _received.clear();
+            _expectedTotal = null;
+          });
+        }
+      } finally {
+        _handling = false;
+      }
     }
   }
 
@@ -102,19 +156,21 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
           controller: _tab,
           tabs: const [
             Tab(text: '导出'),
-            Tab(text: '导入'),
+            Tab(text: '扫描导入'),
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: '刷新数据',
-            onPressed: _rebuildChunks,
-            icon: const Icon(Icons.refresh),
-          ),
+          if (_tab.index == 0)
+            IconButton(
+              tooltip: '刷新',
+              onPressed: _rebuildChunks,
+              icon: const Icon(Icons.refresh),
+            ),
         ],
       ),
       body: TabBarView(
         controller: _tab,
+        physics: const NeverScrollableScrollPhysics(),
         children: [
           _buildExport(theme),
           _buildImport(theme),
@@ -125,14 +181,14 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
 
   Widget _buildExport(ThemeData theme) {
     if (_chunks.isEmpty) {
-      return const Center(child: Text('无数据'));
+      return const Center(child: Text('无数据可导出'));
     }
     final chunk = _chunks[_index.clamp(0, _chunks.length - 1)];
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          '用另一台设备「导入」页扫描或手动输入下方内容',
+          '在另一台设备打开「扫描导入」，对准此二维码',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.outline,
           ),
@@ -145,14 +201,20 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
         const SizedBox(height: 16),
         Center(
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 8,
+                ),
+              ],
             ),
             child: SizedBox(
-              width: 260,
-              height: 260,
+              width: 280,
+              height: 280,
               child: PrettyQrView.data(
                 data: chunk,
                 decoration: const PrettyQrDecoration(
@@ -167,14 +229,14 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton.filledTonal(
-              onPressed: _index > 0
-                  ? () => setState(() => _index--)
-                  : null,
+              onPressed:
+                  _index > 0 ? () => setState(() => _index--) : null,
               icon: const Icon(Icons.chevron_left),
             ),
-            const SizedBox(width: 12),
-            Text('${_index + 1} / ${_chunks.length}'),
-            const SizedBox(width: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('${_index + 1} / ${_chunks.length}'),
+            ),
             IconButton.filledTonal(
               onPressed: _index < _chunks.length - 1
                   ? () => setState(() => _index++)
@@ -184,28 +246,8 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
           ],
         ),
         const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: chunk));
-            SmartDialog.showToast('已复制当前段');
-          },
-          icon: const Icon(Icons.copy),
-          label: const Text('复制当前段文本'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(
-              ClipboardData(text: _chunks.join('\n')),
-            );
-            SmartDialog.showToast('已复制全部 ${_chunks.length} 段');
-          },
-          icon: const Icon(Icons.copy_all),
-          label: const Text('复制全部段'),
-        ),
-        const SizedBox(height: 12),
         Text(
-          '数据较大时会自动分成多段二维码，请按顺序扫描或复制。',
+          '数据较多时会分成多段，请按顺序让对方扫完每一段。',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
           ),
@@ -216,72 +258,67 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
 
   Widget _buildImport(ThemeData theme) {
     final total = _expectedTotal;
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Column(
       children: [
         SwitchListTile(
-          contentPadding: EdgeInsets.zero,
           title: const Text('覆盖导入'),
           subtitle: const Text('关闭则与现有数据合并'),
           value: _replace,
           onChanged: (v) => setState(() => _replace = v),
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _pasteCtrl,
-          maxLines: 6,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: '粘贴二维码文本',
-            hintText: '可一次粘贴多段（每行一段），或粘贴完整 JSON',
+        if (total != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('分段进度：${_received.length} / $total'),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(
+                  value: total == 0 ? 0 : _received.length / total,
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => setState(() {
+                      _received.clear();
+                      _expectedTotal = null;
+                    }),
+                    child: const Text('清空进度'),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: () => _ingestPasted(_pasteCtrl.text),
-          icon: const Icon(Icons.download),
-          label: const Text('导入粘贴内容'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final data = await Clipboard.getData(Clipboard.kTextPlain);
-            final text = data?.text;
-            if (text == null || text.trim().isEmpty) {
-              SmartDialog.showToast('剪贴板为空');
-              return;
-            }
-            _pasteCtrl.text = text;
-            _ingestPasted(text);
-          },
-          icon: const Icon(Icons.content_paste),
-          label: const Text('从剪贴板导入'),
-        ),
-        if (total != null) ...[
-          const SizedBox(height: 16),
-          Text(
-            '分段进度：${_received.length} / $total',
-            style: theme.textTheme.titleSmall,
-          ),
-          const SizedBox(height: 8),
-          LinearProgressIndicator(
-            value: total == 0 ? 0 : _received.length / total,
-          ),
-          TextButton(
-            onPressed: () => setState(() {
-              _received.clear();
-              _expectedTotal = null;
-            }),
-            child: const Text('清空已收分段'),
-          ),
-        ],
-        const SizedBox(height: 16),
-        Text(
-          '用法：在导出端显示二维码或复制文本，在本机粘贴导入。'
-          '文件导入仍可在「本地数据导入导出」中使用。',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.outline,
-          ),
+        Expanded(
+          child: _scanner == null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('相机未就绪'),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _startScanner,
+                        child: const Text('启动扫描'),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '桌面端若无摄像头，请使用手机扫描另一台设备的导出二维码',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ClipRect(
+                  child: MobileScanner(
+                    controller: _scanner,
+                    onDetect: _onDetect,
+                  ),
+                ),
         ),
       ],
     );
