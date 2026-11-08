@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:PiliPlus/utils/local_list_io.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -24,18 +26,26 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   bool _scanning = false;
   bool _handling = false;
   MobileScannerController? _scanner;
+  Timer? _cycleTimer;
+  bool _autoCycle = true;
+  static const _cycleInterval = Duration(seconds: 2);
 
   @override
   void initState() {
     super.initState();
     _rebuildChunks();
-    _tab.addListener(() {
-      if (_tab.index == 1) {
-        _startScanner();
-      } else {
-        _stopScanner();
-      }
-    });
+    _tab.addListener(_onTabChanged);
+    _startCycleIfNeeded();
+  }
+
+  void _onTabChanged() {
+    if (_tab.index == 1) {
+      _stopCycle();
+      _startScanner();
+    } else {
+      _stopScanner();
+      _startCycleIfNeeded();
+    }
   }
 
   void _rebuildChunks() {
@@ -43,6 +53,23 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       _chunks = LocalListIo.buildQrChunks();
       _index = 0;
     });
+    _startCycleIfNeeded();
+  }
+
+  void _startCycleIfNeeded() {
+    _stopCycle();
+    if (!_autoCycle || _chunks.length <= 1 || _tab.index != 0) return;
+    _cycleTimer = Timer.periodic(_cycleInterval, (_) {
+      if (!mounted || _chunks.isEmpty) return;
+      setState(() {
+        _index = (_index + 1) % _chunks.length;
+      });
+    });
+  }
+
+  void _stopCycle() {
+    _cycleTimer?.cancel();
+    _cycleTimer = null;
   }
 
   Future<void> _startScanner() async {
@@ -68,6 +95,8 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
 
   @override
   void dispose() {
+    _stopCycle();
+    _tab.removeListener(_onTabChanged);
     _tab.dispose();
     _scanner?.dispose();
     super.dispose();
@@ -229,25 +258,54 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton.filledTonal(
-              onPressed:
-                  _index > 0 ? () => setState(() => _index--) : null,
+              onPressed: _chunks.length > 1
+                  ? () {
+                      setState(() {
+                        _index = (_index - 1 + _chunks.length) % _chunks.length;
+                      });
+                    }
+                  : null,
               icon: const Icon(Icons.chevron_left),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('${_index + 1} / ${_chunks.length}'),
+              child: Text(
+                '${_index + 1} / ${_chunks.length}'
+                '${_autoCycle && _chunks.length > 1 ? ' · 自动循环' : ''}',
+              ),
             ),
             IconButton.filledTonal(
-              onPressed: _index < _chunks.length - 1
-                  ? () => setState(() => _index++)
+              onPressed: _chunks.length > 1
+                  ? () {
+                      setState(() {
+                        _index = (_index + 1) % _chunks.length;
+                      });
+                    }
                   : null,
               icon: const Icon(Icons.chevron_right),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        if (_chunks.length > 1) ...[
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('自动循环显示'),
+            subtitle: const Text('约每 2 秒切换下一段，便于对方连续扫描'),
+            value: _autoCycle,
+            onChanged: (v) {
+              setState(() => _autoCycle = v);
+              if (v) {
+                _startCycleIfNeeded();
+              } else {
+                _stopCycle();
+              }
+            },
+          ),
+        ],
+        const SizedBox(height: 8),
         Text(
-          '数据较多时会分成多段，请按顺序让对方扫完每一段。',
+          '数据较多时会分成多段，开启自动循环后对方可持续扫描。',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.outline,
           ),
