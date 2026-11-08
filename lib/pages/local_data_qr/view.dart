@@ -249,28 +249,24 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
   /// 从图片文件识别二维码（桌面主路径，不依赖相机插件）
   Future<void> _scanFromImageFile() async {
     try {
-      final r = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: true,
-      );
-      if (r == null || r.files.isEmpty) return;
-      var hit = 0;
-      for (final f in r.files) {
-        final path = f.path;
-        Uint8List? bytes = f.bytes;
-        if ((bytes == null || bytes.isEmpty) && path != null) {
-          bytes = await File(path).readAsBytes();
-        }
-        if (bytes == null || bytes.isEmpty) continue;
-        final text = _decodeQrFromImageBytes(bytes);
-        if (text == null || text.isEmpty) continue;
-        hit++;
-        await _ingestScanText(text);
-        if (_handling) break;
+      // file_picker 13：用 pickFile；多图可多次选择
+      final f = await FilePicker.pickFile(type: FileType.image);
+      if (f == null) return;
+      Uint8List? bytes = f.bytes;
+      final path = f.path;
+      if ((bytes == null || bytes.isEmpty) && path != null) {
+        bytes = await File(path).readAsBytes();
       }
-      if (hit == 0) {
+      if (bytes == null || bytes.isEmpty) {
+        SmartDialog.showToast('无法读取图片');
+        return;
+      }
+      final text = _decodeQrFromImageBytes(bytes);
+      if (text == null || text.isEmpty) {
         SmartDialog.showToast('图片中未识别到同步二维码');
+        return;
       }
+      await _ingestScanText(text);
     } catch (e) {
       SmartDialog.showToast('读图失败: $e');
     }
@@ -293,13 +289,14 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
       final rgba = image.convert(numChannels: 4);
       final pixels = rgba.getBytes(order: img.ChannelOrder.rgba);
       // zxing2 RGBLuminanceSource 期望每像素 int（可用打包 RGB）
-      final rgb = List<int>.generate(rgba.width * rgba.height, (i) {
+      final rgb = Int32List(rgba.width * rgba.height);
+      for (var i = 0; i < rgb.length; i++) {
         final o = i * 4;
         final r = pixels[o];
         final g = pixels[o + 1];
         final b = pixels[o + 2];
-        return (r << 16) | (g << 8) | b;
-      });
+        rgb[i] = (r << 16) | (g << 8) | b;
+      }
       final source = RGBLuminanceSource(rgba.width, rgba.height, rgb);
       final bitmap = BinaryBitmap(HybridBinarizer(source));
       final result = QRCodeReader().decode(bitmap);
