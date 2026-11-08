@@ -455,24 +455,17 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
                     icon: const Icon(Icons.paste),
                     label: const Text('粘贴文本'),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _scanning ? _stopScanner : _startScanner,
-                    icon: Icon(
-                      _scanning ? Icons.videocam_off : Icons.photo_camera,
+                  // mobile_scanner 官方不支持 Windows/Linux，避免点了报 MissingPluginException
+                  if (!_isDesktop || Platform.isMacOS)
+                    OutlinedButton.icon(
+                      onPressed: _scanning ? _stopScanner : _startScanner,
+                      icon: Icon(
+                        _scanning ? Icons.videocam_off : Icons.photo_camera,
+                      ),
+                      label: Text(_scanning ? '关闭摄像头' : '打开摄像头'),
                     ),
-                    label: Text(_scanning ? '关闭摄像头' : '尝试打开摄像头'),
-                  ),
                 ],
               ),
-              if (_cameraError != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _cameraError!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  ),
-                ),
-              ],
               if (total > 0) ...[
                 const SizedBox(height: 8),
                 Text('进度：${_received.length}/$total'),
@@ -499,9 +492,9 @@ class _LocalDataQrPageState extends State<LocalDataQrPage>
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      _isDesktop
-                          ? 'Windows / 桌面推荐：对端导出页截图或拍照保存图片，点「从图片识别」选图即可。\n也可粘贴同步文本；摄像头依赖系统插件，可能不可用。'
-                          : '将摄像头对准导出端二维码；收齐全部段后会自动停止并导入。',
+                      Platform.isWindows || Platform.isLinux
+                          ? 'Windows 不支持摄像头扫码。\n请对导出端二维码截图，点「从图片识别」选图；或使用「粘贴文本」。\n收齐全部段后会自动导入。'
+                          : '将摄像头对准导出端二维码；收齐全部段后会自动停止并导入。也可从图片识别。',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.outline,
