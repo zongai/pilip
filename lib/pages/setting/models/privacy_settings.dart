@@ -71,6 +71,14 @@ List<SettingsModel> get privacySettings => [
     ),
     NormalModel(
       onTap: (context, setState) {
+        Get.toNamed('/localDataQrPage');
+      },
+      title: '二维码同步',
+      subtitle: '用二维码在多设备间同步本地数据',
+      leading: const Icon(Icons.qr_code_2_outlined),
+    ),
+    NormalModel(
+      onTap: (context, setState) {
         _showLocalDataIoSheet(context);
       },
       title: '本地数据导入导出',
@@ -144,6 +152,15 @@ void _showLocalDataIoSheet(BuildContext context) {
                 ),
               ),
               const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.qr_code_2),
+                title: const Text('二维码同步'),
+                subtitle: const Text('展示/粘贴二维码内容进行多端同步'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Get.toNamed('/localDataQrPage');
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.upload_outlined),
                 title: const Text('全部导出'),

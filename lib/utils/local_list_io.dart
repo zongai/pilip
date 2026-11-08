@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:archive/archive.dart';
 import 'dart:typed_data' show Uint8List;
 
 import 'package:PiliPlus/utils/global_data.dart';
@@ -155,6 +156,135 @@ abstract final class LocalListIo {
     };
   }
 
+  static Map<String, dynamic> buildFullPayload() {
+    final data = _collectAll();
+    final counts = {
+      for (final e in data.entries)
+        e.key: e.value is List ? (e.value as List).length : 0,
+    };
+    return {
+      'type': allType,
+      'version': 2,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'counts': counts,
+      'data': data,
+    };
+  }
+
+  /// 单段二维码建议容量（字符）。过长手机难扫。
+  static const int qrChunkSize = 800;
+
+  static const String qrPrefix = 'P1S'; // PiliPlus Sync
+
+  /// 将全部本地数据压缩并切分为二维码文本列表
+  static List<String> buildQrChunks() {
+    final payload = buildFullPayload();
+    final jsonStr = jsonEncode(payload);
+    final raw = utf8.encode(jsonStr);
+    final gzipped = const GZipEncoder().encodeBytes(raw);
+    final b64 = base64UrlEncode(gzipped).replaceAll('=', '');
+    if (b64.length <= qrChunkSize) {
+      return ['$qrPrefix|1|1|$b64'];
+    }
+    final chunks = <String>[];
+    final total = (b64.length / qrChunkSize).ceil();
+    for (var i = 0; i < total; i++) {
+      final start = i * qrChunkSize;
+      final end = (start + qrChunkSize).clamp(0, b64.length);
+      chunks.add('$qrPrefix|${i + 1}|$total|${b64.substring(start, end)}');
+    }
+    return chunks;
+  }
+
+  /// 解析一段或多段二维码内容，合并后导入
+  static Future<bool> importFromQrTexts(
+    Iterable<String> texts, {
+    bool replace = false,
+  }) async {
+    final parts = <int, String>{};
+    int? total;
+    for (final raw in texts) {
+      final text = raw.trim();
+      if (text.isEmpty) continue;
+      if (!text.startsWith('$qrPrefix|')) {
+        // 允许直接粘贴完整 JSON
+        try {
+          final decoded = jsonDecode(text);
+          if (decoded is Map) {
+            await applyDecodedMap(decoded, replace: replace);
+            return true;
+          }
+        } catch (_) {}
+        continue;
+      }
+      final segs = text.split('|');
+      if (segs.length < 4) continue;
+      final idx = int.tryParse(segs[1]);
+      final tot = int.tryParse(segs[2]);
+      if (idx == null || tot == null || idx < 1 || tot < 1) continue;
+      total ??= tot;
+      final body = segs.sublist(3).join('|');
+      parts[idx] = body;
+    }
+    if (parts.isEmpty) {
+      SmartDialog.showToast('未识别到有效同步数据');
+      return false;
+    }
+    final t = total ?? parts.length;
+    if (parts.length < t) {
+      SmartDialog.showToast('二维码不完整：${parts.length}/$t，请继续扫描或粘贴');
+      return false;
+    }
+    final buf = StringBuffer();
+    for (var i = 1; i <= t; i++) {
+      final p = parts[i];
+      if (p == null) {
+        SmartDialog.showToast('缺少第 $i/$t 段');
+        return false;
+      }
+      buf.write(p);
+    }
+    try {
+      var b64 = buf.toString();
+      final pad = (4 - b64.length % 4) % 4;
+      b64 = b64.padRight(b64.length + pad, '=');
+      final gzipped = base64Url.decode(b64);
+      final raw = const GZipDecoder().decodeBytes(gzipped);
+      final decoded = jsonDecode(utf8.decode(raw));
+      if (decoded is! Map) {
+        SmartDialog.showToast('同步数据无效');
+        return false;
+      }
+      await applyDecodedMap(Map<String, dynamic>.from(decoded), replace: replace);
+      return true;
+    } catch (e) {
+      SmartDialog.showToast('解析失败: $e');
+      return false;
+    }
+  }
+
+  static Future<void> applyDecodedMap(
+    Map decoded, {
+    required bool replace,
+  }) async {
+    Map? data;
+    final t = decoded['type'];
+    if (t == allType) {
+      final d = decoded['data'];
+      if (d is Map) data = d;
+    } else if (decoded['data'] is Map) {
+      data = decoded['data'] as Map;
+    } else {
+      await _importLegacySingle(decoded, replace: replace);
+      return;
+    }
+    if (data == null) {
+      SmartDialog.showToast('无效的备份数据');
+      return;
+    }
+    await _applyAllData(data, replace: replace);
+  }
+
   static Future<void> exportAll() async {
     final data = _collectAll();
     final counts = {
@@ -197,7 +327,10 @@ abstract final class LocalListIo {
       SmartDialog.showToast('无效的全部备份文件');
       return;
     }
+    await _applyAllData(data, replace: replace);
+  }
 
+  static Future<void> _applyAllData(Map data, {required bool replace}) async {
     final parts = <String>[];
 
     void applyMaps(
