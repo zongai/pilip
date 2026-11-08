@@ -739,7 +739,7 @@ abstract final class Pref {
     GlobalData().localHistoryList = [];
   }
 
-  /// 短视频阈值（秒）：低于此时长在列表中默认视为已看完（可手动标未看）
+  /// 短视频时长（秒）：低于此时长在列表中默认视为已看完（可手动标未看）
   static const int shortVideoAutoWatchedSec = 180;
 
   static String? _watchKey({int? aid, String? bvid}) {
@@ -748,6 +748,55 @@ abstract final class Pref {
     return null;
   }
 
+  /// 手动观看状态：key -> watched | unwatched（优先于历史与短视频默认）
+  static Map<String, String> get localWatchStatus {
+    final raw = _localCache.get(
+      LocalCacheKey.localWatchStatus,
+      defaultValue: <String, dynamic>{},
+    );
+    if (raw is Map) {
+      return {for (final e in raw.entries) '${e.key}': '${e.value}'};
+    }
+    return <String, String>{};
+  }
+
+  static set localWatchStatus(Map<String, String> map) => _localCache.put(
+        LocalCacheKey.localWatchStatus,
+        Map<String, String>.from(map),
+      );
+
+  static void _setWatchStatus(String status, {int? aid, String? bvid}) {
+    final keys = <String>{};
+    if (bvid != null && bvid.isNotEmpty) {
+      keys.add(bvid);
+      keys.add(bvid.toLowerCase());
+    }
+    if (aid != null) {
+      keys.add('av$aid');
+      keys.add('$aid');
+    }
+    if (keys.isEmpty) return;
+    final map = Map<String, String>.from(localWatchStatus);
+    for (final k in keys) {
+      map[k] = status;
+    }
+    localWatchStatus = map;
+  }
+
+  static String? _manualWatchStatus({int? aid, String? bvid}) {
+    final map = localWatchStatus;
+    if (bvid != null && bvid.isNotEmpty) {
+      final v = map[bvid] ?? map[bvid.toLowerCase()];
+      if (v != null) return v;
+    }
+    if (aid != null) {
+      final v = map['av$aid'] ?? map['$aid'];
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  // 兼容旧版 localUnwatched
   static Set<String> get localUnwatched {
     final raw = _localCache.get(
       LocalCacheKey.localUnwatched,
@@ -760,32 +809,23 @@ abstract final class Pref {
   static set localUnwatched(Set<String> set) =>
       _localCache.put(LocalCacheKey.localUnwatched, set.toList());
 
-  static void _addLocalUnwatched(String key) {
-    final s = Set<String>.from(localUnwatched)..add(key);
-    localUnwatched = s;
-  }
-
-  static void _removeLocalUnwatched(String key) {
-    final s = Set<String>.from(localUnwatched)..remove(key);
-    localUnwatched = s;
-  }
-
   /// 本地观看进度：null=未看，-1=已看完，0=已看（无具体进度），>0=已看到的秒数
-  /// 时长短于 3 分钟且未手动标未看时，默认返回 -1（已看完）
-  static bool _isExplicitUnwatched({int? aid, String? bvid}) {
+  static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
+    // 1) 手动状态优先（解决可标已看却无法取消）
+    final manual = _manualWatchStatus(aid: aid, bvid: bvid);
+    if (manual == 'unwatched') return null;
+    if (manual == 'watched') return -1;
+
+    // 2) 兼容旧 localUnwatched
     final u = localUnwatched;
     if (bvid != null && bvid.isNotEmpty) {
-      if (u.contains(bvid) || u.contains(bvid.toLowerCase())) return true;
+      if (u.contains(bvid) || u.contains(bvid.toLowerCase())) return null;
     }
-    if (aid != null && (u.contains('av$aid') || u.contains('$aid'))) return true;
-    return false;
-  }
-
-  static int? getLocalWatchProgress({int? aid, String? bvid, int? duration}) {
-    if (_isExplicitUnwatched(aid: aid, bvid: bvid)) {
-      return null; // 用户手动标为未看
+    if (aid != null && (u.contains('av$aid') || u.contains('$aid'))) {
+      return null;
     }
 
+    // 3) 本地历史进度
     Map? found;
     for (final e in GlobalData().localHistoryList) {
       final eb = e['bvid']?.toString();
@@ -827,11 +867,9 @@ abstract final class Pref {
       return prog;
     }
 
-    // 无历史：可选短视频默认已看完
+    // 4) 短视频默认已看
     final dur = duration ?? 0;
-    if (autoWatchShortVideos &&
-        dur > 0 &&
-        dur < shortVideoAutoWatchedSec) {
+    if (autoWatchShortVideos && dur > 0 && dur < shortVideoAutoWatchedSec) {
       return -1;
     }
     return null;
@@ -854,11 +892,18 @@ abstract final class Pref {
     int? duration,
     bool completed = true,
   }) {
-    if (bvid != null && bvid.isNotEmpty) _removeLocalUnwatched(bvid);
-    if (aid != null) {
-      _removeLocalUnwatched('av$aid');
-      _removeLocalUnwatched('$aid');
+    _setWatchStatus('watched', aid: aid, bvid: bvid);
+    final u = Set<String>.from(localUnwatched);
+    if (bvid != null && bvid.isNotEmpty) {
+      u.remove(bvid);
+      u.remove(bvid.toLowerCase());
     }
+    if (aid != null) {
+      u.remove('av$aid');
+      u.remove('$aid');
+    }
+    localUnwatched = u;
+
     final dur = duration ?? 0;
     addLocalHistory(
       aid: aid,
@@ -873,8 +918,23 @@ abstract final class Pref {
     );
   }
 
-  /// 手动标为未看：清除相关历史，并持久化未看覆盖
+  /// 手动标为未看
   static void markLocalUnwatched({int? aid, String? bvid}) {
+    _setWatchStatus('unwatched', aid: aid, bvid: bvid);
+
+    final list = List<Map>.from(localHistory);
+    list.removeWhere((e) {
+      final eb = e['bvid']?.toString() ?? '';
+      final ea = e['aid'];
+      if (bvid != null && bvid.isNotEmpty && eb == bvid) return true;
+      if (aid != null && ea != null && (ea == aid || ea.toString() == '$aid')) {
+        return true;
+      }
+      return false;
+    });
+    localHistory = list;
+    GlobalData().localHistoryList = list;
+
     final keys = <String>{};
     if (bvid != null && bvid.isNotEmpty) {
       keys.add(bvid);
@@ -884,31 +944,8 @@ abstract final class Pref {
       keys.add('av$aid');
       keys.add('$aid');
     }
-    if (keys.isEmpty) return;
-
-    // 一次扫掉所有相关历史
-    final list = List<Map>.from(localHistory);
-    list.removeWhere((e) {
-      final eb = e['bvid']?.toString() ?? '';
-      final ea = e['aid'];
-      if (bvid != null && bvid.isNotEmpty && eb == bvid) return true;
-      if (aid != null && ea != null && (ea == aid || ea.toString() == '$aid')) {
-        return true;
-      }
-      if (eb.isNotEmpty && keys.contains(eb)) return true;
-      if (ea != null && (keys.contains('av$ea') || keys.contains('$ea'))) {
-        return true;
-      }
-      return false;
-    });
-    localHistory = list;
-    GlobalData().localHistoryList = list;
-
-    final u = Set<String>.from(localUnwatched)..addAll(keys);
-    localUnwatched = u;
+    localUnwatched = Set<String>.from(localUnwatched)..addAll(keys);
   }
-
-
 
   /// 本地稍后再看
   static List<Map> get localLater {

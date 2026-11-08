@@ -122,15 +122,15 @@ class _LocalWatchToggleIconState extends State<LocalWatchToggleIcon> {
     final colorScheme = ColorScheme.of(context);
     final watched = _watched;
 
-    // Listener 优先命中，避免被外层列表手势抢走（尤其 Windows）
-    return Listener(
+    return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onPointerUp: (_) => _toggle(),
+      onTap: _toggle,
       child: Material(
         color: watched
             ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.9)
             : Colors.black54,
         shape: const CircleBorder(),
+        elevation: 2,
         child: Padding(
           padding: widget.padding,
           child: Icon(

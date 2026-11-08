@@ -269,6 +269,7 @@ abstract final class LocalCacheKey {
       localVideoPlaylist = 'localVideoPlaylist',
       localHistory = 'localHistory',
       localUnwatched = 'localUnwatched',
+      localWatchStatus = 'localWatchStatus',
       localLater = 'localLater',
       danmakuFilterRules = 'danmakuFilterRules',
       mixinKey = 'mixinKey',
