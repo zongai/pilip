@@ -8,7 +8,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// 本地合集收藏：始终用固定高度卡片，避免 ListView 无界高度下 AspectRatio/Spacer 把条目压成 0
+/// 本地合集收藏：按页面宽度自适应列表 / 多列网格
 class LocalSeasonPage extends StatefulWidget {
   const LocalSeasonPage({super.key});
 
@@ -86,6 +86,7 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottom = MediaQuery.viewPaddingOf(context).bottom;
+    final hPad = MediaQuery.viewPaddingOf(context).horizontal;
 
     return Scaffold(
       appBar: AppBar(
@@ -120,32 +121,59 @@ class _LocalSeasonPageState extends State<LocalSeasonPage> {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final maxW = constraints.maxWidth;
-                final list = ListView.separated(
-                  padding: EdgeInsets.only(
-                    left: maxW >= 1000 ? 24 : 0,
-                    right: maxW >= 1000 ? 24 : 0,
-                    bottom: bottom + 24,
-                  ),
-                  itemCount: _list.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = _list[index];
-                    return _SeasonCard(
-                      item: item,
+                // 断点：手机单列；平板双列；桌面多列（限制最大内容宽，避免超宽拉伸）
+                final useGrid = maxW >= 600;
+                final contentMax = maxW >= 1400
+                    ? 1200.0
+                    : maxW >= 1000
+                    ? 960.0
+                    : maxW;
+                final padH = maxW >= 600 ? 12.0 : 0.0;
+                final padding = EdgeInsets.only(
+                  left: padH + hPad,
+                  right: padH + hPad,
+                  top: 4,
+                  bottom: bottom + 24,
+                );
+
+                Widget child;
+                if (!useGrid) {
+                  child = ListView.separated(
+                    padding: padding,
+                    itemCount: _list.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) => _SeasonCard(
+                      item: _list[index],
+                      dense: true,
                       onOpen: _openSeason,
                       onUnfav: _unfav,
-                    );
-                  },
-                );
-                if (maxW < 720) return list;
+                    ),
+                  );
+                } else {
+                  // 列宽约 280–320，行高固定，避免 0 高度
+                  final crossExtent = maxW >= 1100 ? 300.0 : 280.0;
+                  child = GridView.builder(
+                    padding: padding,
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: crossExtent,
+                      mainAxisExtent: 88,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 10,
+                    ),
+                    itemCount: _list.length,
+                    itemBuilder: (context, index) => _SeasonCard(
+                      item: _list[index],
+                      dense: false,
+                      onOpen: _openSeason,
+                      onUnfav: _unfav,
+                    ),
+                  );
+                }
+
+                if (maxW <= contentMax + 1) return child;
                 return Align(
                   alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: maxW >= 1200 ? 960 : 720,
-                    ),
-                    child: list,
-                  ),
+                  child: SizedBox(width: contentMax, child: child),
                 );
               },
             ),
@@ -158,11 +186,13 @@ class _SeasonCard extends StatelessWidget {
     required this.item,
     required this.onOpen,
     required this.onUnfav,
+    this.dense = true,
   });
 
   final Map item;
   final void Function(Map item) onOpen;
   final void Function(int id, String title) onUnfav;
+  final bool dense;
 
   static int? _asInt(dynamic v) {
     if (v == null) return null;
@@ -184,22 +214,26 @@ class _SeasonCard extends StatelessWidget {
     final countText =
         mediaCount != null && mediaCount > 0 ? '$mediaCount 集' : null;
 
-    // 固定高度，避免 ListView 子项无界高度导致封面/文字高度为 0
+    final coverW = dense ? 120.0 : 110.0;
+    final coverH = dense ? 72.0 : 68.0;
+
     return Material(
       type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(8),
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: () => onOpen(item),
         onLongPress: id == 0 ? null : () => onUnfav(id, title),
         onSecondaryTap: PlatformUtils.isMobile || id == 0
             ? null
             : () => onUnfav(id, title),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Style.safeSpace,
-            vertical: 8,
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? Style.safeSpace : 6,
+            vertical: dense ? 8 : 6,
           ),
           child: SizedBox(
-            height: 72,
+            height: coverH,
             child: Row(
               children: [
                 ClipRRect(
@@ -208,8 +242,8 @@ class _SeasonCard extends StatelessWidget {
                     children: [
                       NetworkImgLayer(
                         src: cover,
-                        width: 120,
-                        height: 72,
+                        width: coverW,
+                        height: coverH,
                       ),
                       if (countText != null)
                         PBadge(
@@ -220,7 +254,7 @@ class _SeasonCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
