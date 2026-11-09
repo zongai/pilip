@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
+import 'package:PiliPlus/common/widgets/local_watch_toggle.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
@@ -787,13 +788,19 @@ class VideoDetailController extends GetxController
                       final itemBvid = m['bvid']?.toString();
                       final duration = asInt(m['duration']) ?? 0;
                       final author = '${m['authorName'] ?? ''}';
+                      final targetAid = asInt(m['aid']);
                       final isCurr = itemBvid != null &&
                           itemBvid.isNotEmpty &&
                           itemBvid == currentBvid;
+                      final watched = Pref.enableLocalFeatures &&
+                          Pref.isLocalWatched(
+                            aid: targetAid,
+                            bvid: itemBvid,
+                            duration: duration,
+                          );
                       return InkWell(
                         onTap: () {
                           Get.back();
-                          final targetAid = asInt(m['aid']);
                           MediaListItemModel? ep;
                           if (mediaList.isNotEmpty) {
                             final i = mediaList.indexWhere((e) {
@@ -834,17 +841,33 @@ class VideoDetailController extends GetxController
                               Stack(
                                 clipBehavior: Clip.none,
                                 children: [
-                                  NetworkImgLayer(
-                                    src: cover.isEmpty ? null : cover,
-                                    width: 160,
-                                    height: 100,
+                                  LocalWatchDim(
+                                    watched: watched && !isCurr,
+                                    child: NetworkImgLayer(
+                                      src: cover.isEmpty ? null : cover,
+                                      width: 160,
+                                      height: 100,
+                                    ),
                                   ),
+                                  if (Pref.enableLocalFeatures)
+                                    LocalWatchProgressBar(
+                                      aid: targetAid,
+                                      bvid: itemBvid,
+                                      duration: duration,
+                                    ),
                                   if (duration > 0)
                                     PBadge(
                                       text: DurationUtils.formatDuration(
                                         duration,
                                       ),
                                       right: 6.0,
+                                      bottom: 6.0,
+                                      type: PBadgeType.gray,
+                                    ),
+                                  if (watched && !isCurr)
+                                    const PBadge(
+                                      text: '已看',
+                                      left: 6.0,
                                       bottom: 6.0,
                                       type: PBadgeType.gray,
                                     ),
@@ -862,8 +885,9 @@ class VideoDetailController extends GetxController
                                       style: TextStyle(
                                         fontWeight:
                                             isCurr ? FontWeight.bold : null,
-                                        color:
-                                            isCurr ? cs.primary : null,
+                                        color: isCurr
+                                            ? cs.primary
+                                            : (watched ? cs.outline : null),
                                       ),
                                     ),
                                     const Spacer(),

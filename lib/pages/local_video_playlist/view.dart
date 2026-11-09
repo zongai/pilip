@@ -1,5 +1,8 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/local_watch_toggle.dart';
+import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/common/video/source_type.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
@@ -500,9 +503,13 @@ class _LocalVideoPlaylistDetailPageState
     final cover = item['cover'] as String?;
     final author = item['authorName'] as String? ?? '';
     final duration = _asInt(item['duration']) ?? 0;
+    final aid = _asInt(item['aid']);
+    final bvid = item['bvid'] as String?;
     final k = _key(item);
     final selected = _selected.contains(k);
     final outline = theme.colorScheme.outline;
+    final watched = Pref.enableLocalFeatures &&
+        Pref.isLocalWatched(aid: aid, bvid: bvid, duration: duration);
     return Material(
       type: MaterialType.transparency,
       color: selected
@@ -558,31 +565,50 @@ class _LocalVideoPlaylistDetailPageState
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      NetworkImgLayer(
-                        src: cover,
-                        width: 140,
-                        height: 140 / Style.aspectRatio,
+                      LocalWatchDim(
+                        watched: watched,
+                        child: NetworkImgLayer(
+                          src: cover,
+                          width: 140,
+                          height: 140 / Style.aspectRatio,
+                        ),
                       ),
+                      if (Pref.enableLocalFeatures)
+                        LocalWatchProgressBar(
+                          aid: aid,
+                          bvid: bvid,
+                          duration: duration,
+                        ),
                       if (duration > 0)
+                        PBadge(
+                          text: DurationUtils.formatDuration(duration),
+                          right: 6.0,
+                          bottom: 6.0,
+                          type: PBadgeType.gray,
+                        ),
+                      if (watched)
+                        const PBadge(
+                          text: '已看',
+                          left: 6.0,
+                          bottom: 6.0,
+                          type: PBadgeType.gray,
+                        ),
+                      if (Pref.enableLocalFeatures && !_multi)
                         Positioned(
-                          right: 4,
-                          bottom: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                            child: Text(
-                              DurationUtils.formatDuration(duration),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                              ),
-                            ),
+                          left: 2,
+                          top: 2,
+                          child: LocalWatchToggleIcon(
+                            aid: aid,
+                            bvid: bvid,
+                            title: title,
+                            cover: cover,
+                            authorName: author,
+                            duration: duration,
+                            size: 20,
+                            padding: const EdgeInsets.all(6),
+                            onChanged: (_) {
+                              if (mounted) setState(() {});
+                            },
                           ),
                         ),
                     ],
@@ -604,6 +630,7 @@ class _LocalVideoPlaylistDetailPageState
                           fontSize: theme.textTheme.bodyMedium!.fontSize,
                           height: 1.42,
                           letterSpacing: 0.3,
+                          color: watched ? outline : null,
                         ),
                       ),
                       const Spacer(),
@@ -625,8 +652,8 @@ class _LocalVideoPlaylistDetailPageState
                   onPressed: () {
                     Pref.removeLocalVideoPlaylistItem(
                       playlistId: widget.playlistId,
-                      aid: _asInt(item['aid']),
-                      bvid: item['bvid'] as String?,
+                      aid: aid,
+                      bvid: bvid,
                     );
                     _refresh();
                   },
