@@ -19,6 +19,7 @@ import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/local_lan_sync.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -55,6 +56,10 @@ class _MainAppState extends PopScopeState<MainApp>
     if (!Platform.isMacOS) {
       PiliScheme.init();
     }
+    // 局域网：启动后尝试自动同步已配对设备
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      LocalLanSyncClient.autoSyncOnce();
+    });
   }
 
   @override

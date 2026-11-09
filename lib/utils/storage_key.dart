@@ -2,6 +2,8 @@
 
 abstract final class SettingBoxKey {
   static const String enableLocalFeatures = 'enableLocalFeatures';
+  static const String enableLanAutoSync = 'enableLanAutoSync';
+  static const String lanSyncCategories = 'lanSyncCategories';
   static const String hideFavByKeywords = 'hideFavByKeywords';
   static const String autoWatchShortVideos = 'autoWatchShortVideos';
   static const String favHideKeywords = 'favHideKeywords';
@@ -263,6 +265,8 @@ abstract final class SettingBoxKey {
 abstract final class LocalCacheKey {
   static const String historyPause = 'historyPause',
       blackMids = 'blackMids',
+      lanDeviceId = 'lanDeviceId',
+      lanTrustedPeers = 'lanTrustedPeers',
       localFollows = 'localFollows',
       localSeasons = 'localSeasons',
       localPlaylists = 'localPlaylists',

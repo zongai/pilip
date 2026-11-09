@@ -4,10 +4,11 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:PiliPlus/utils/local_list_io.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
-/// 局域网自动发现 + 用户确认后的本地数据同步（已看/历史、关注、黑名单、播单等）
+/// 局域网自动发现 + PIN/已配对 同步本地数据
 abstract final class LocalLanSync {
   static const int udpPort = 37218;
   static const int httpPort = 37219;
@@ -15,8 +16,19 @@ abstract final class LocalLanSync {
   static const String magicAnnounce = 'PILIP_SYNC_ANNOUNCE';
   static const String serviceName = 'PiliPlus';
 
+  static const Map<String, String> categoryLabels = {
+    'follows': '本地关注',
+    'blacklist': '黑名单',
+    'playlists': '播单(旧)',
+    'videoPlaylists': '本地播单',
+    'seasons': '合集',
+    'history': '历史/已看',
+    'later': '稍后再看',
+    'searchHistory': '搜索历史',
+    'favHideKeywords': '隐藏关键字',
+  };
+
   static String? _deviceName;
-  static String? _deviceId;
 
   static Future<String> deviceName() async {
     if (_deviceName != null) return _deviceName!;
@@ -28,13 +40,8 @@ abstract final class LocalLanSync {
     return _deviceName!;
   }
 
-  static String deviceId() {
-    if (_deviceId != null) return _deviceId!;
-    // 进程内稳定即可；配对不持久化到此阶段
-    _deviceId =
-        '${Platform.operatingSystem}-${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}';
-    return _deviceId!;
-  }
+  /// 跨启动稳定的设备 ID
+  static String deviceId() => Pref.lanDeviceId;
 
   static Future<List<String>> localIPv4s() async {
     final out = <String>[];
@@ -51,6 +58,34 @@ abstract final class LocalLanSync {
       if (kDebugMode) debugPrint('localIPv4s: $e');
     }
     return out;
+  }
+
+  /// 按勾选类别过滤快照 data
+  static Map<String, dynamic> filterPayload(
+    Map<String, dynamic> full, {
+    List<String>? categories,
+  }) {
+    final cats = categories ?? Pref.lanSyncCategories;
+    final data = full['data'];
+    if (data is! Map) return full;
+    final filtered = <String, dynamic>{};
+    for (final c in cats) {
+      if (data.containsKey(c)) filtered[c] = data[c];
+    }
+    final counts = {
+      for (final e in filtered.entries)
+        e.key: e.value is List ? (e.value as List).length : 0,
+    };
+    return {
+      ...full,
+      'counts': counts,
+      'data': filtered,
+      'categories': cats,
+    };
+  }
+
+  static Map<String, dynamic> buildSnapshot({List<String>? categories}) {
+    return filterPayload(LocalListIo.buildFullPayload(), categories: categories);
   }
 }
 
@@ -69,15 +104,23 @@ class LanPeer {
 
   String get endpoint => 'http://$host:$port';
 
+  bool get isTrusted => Pref.findLanTrustedPeer(deviceId) != null;
+
+  String? get savedPin {
+    final m = Pref.findLanTrustedPeer(deviceId);
+    final p = m?['pin']?.toString();
+    return (p != null && p.isNotEmpty) ? p : null;
+  }
+
   @override
   bool operator ==(Object other) =>
-      other is LanPeer && other.deviceId == deviceId && other.host == host;
+      other is LanPeer && other.deviceId == deviceId;
 
   @override
-  int get hashCode => Object.hash(deviceId, host);
+  int get hashCode => deviceId.hashCode;
 }
 
-/// 本机作为同步源：UDP 可被发现 + HTTP 提供快照
+/// 本机作为同步源
 class LocalLanSyncHost {
   LocalLanSyncHost._();
   static final LocalLanSyncHost instance = LocalLanSyncHost._();
@@ -87,9 +130,6 @@ class LocalLanSyncHost {
   StreamSubscription? _udpSub;
   String? pin;
   bool get isRunning => _http != null;
-
-  final _status = StreamController<String>.broadcast();
-  Stream<String> get status$ => _status.stream;
 
   Future<void> start() async {
     if (isRunning) return;
@@ -133,13 +173,10 @@ class LocalLanSyncHost {
         final bytes = utf8.encode('${LocalLanSync.magicAnnounce}|$announce');
         try {
           _udp!.send(bytes, dg.address, dg.port);
-          // 也回发到对方常见端口，便于对称发现
           _udp!.send(bytes, dg.address, LocalLanSync.udpPort);
         } catch (_) {}
       }
     });
-
-    _status.add('running');
   }
 
   Future<void> stop() async {
@@ -150,12 +187,30 @@ class LocalLanSyncHost {
     await _http?.close(force: true);
     _http = null;
     pin = null;
-    _status.add('stopped');
+  }
+
+  bool _authOk(HttpRequest req) {
+    final qPin = req.uri.queryParameters['pin'] ?? '';
+    if (pin != null && qPin == pin) return true;
+    // 已配对设备：用其保存的 pin 作为长期口令（双方各自保存）
+    final peerId = req.uri.queryParameters['deviceId'] ?? '';
+    if (peerId.isNotEmpty) {
+      final trusted = Pref.findLanTrustedPeer(peerId);
+      if (trusted != null) {
+        final saved = trusted['pin']?.toString();
+        if (saved != null && saved.isNotEmpty && qPin == saved) return true;
+        // 无 pin 字段时允许仅 deviceId（弱，仅局域网）
+        if (saved == null || saved.isEmpty) return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _handleHttp(HttpRequest req, String name, String id) async {
     final res = req.response;
     res.headers.set('Access-Control-Allow-Origin', '*');
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
     final path = req.uri.path;
 
     if (req.method == 'OPTIONS') {
@@ -164,15 +219,20 @@ class LocalLanSyncHost {
       return;
     }
 
+    List<String>? catsFromQuery() {
+      final c = req.uri.queryParameters['categories'];
+      if (c == null || c.isEmpty) return null;
+      return c.split(',').where((e) => e.isNotEmpty).toList();
+    }
+
     if (path == '/info' && req.method == 'GET') {
-      final payload = LocalListIo.buildFullPayload();
-      final counts = payload['counts'] ?? {};
+      final payload = LocalLanSync.buildSnapshot();
       res.headers.contentType = ContentType.json;
       res.write(jsonEncode({
         'name': name,
         'deviceId': id,
         'service': LocalLanSync.serviceName,
-        'counts': counts,
+        'counts': payload['counts'] ?? {},
         'exportedAt': payload['exportedAt'],
       }));
       await res.close();
@@ -180,17 +240,48 @@ class LocalLanSyncHost {
     }
 
     if (path == '/snapshot' && req.method == 'GET') {
-      final qPin = req.uri.queryParameters['pin'] ?? '';
-      if (pin == null || qPin != pin) {
+      if (!_authOk(req)) {
         res.statusCode = 403;
         res.headers.contentType = ContentType.json;
         res.write(jsonEncode({'error': 'invalid_pin'}));
         await res.close();
         return;
       }
-      final payload = LocalListIo.buildFullPayload();
+      final payload = LocalLanSync.buildSnapshot(categories: catsFromQuery());
       res.headers.contentType = ContentType.json;
       res.write(jsonEncode(payload));
+      await res.close();
+      return;
+    }
+
+    // 对方推送数据到本机合并
+    if (path == '/push' && req.method == 'POST') {
+      if (!_authOk(req)) {
+        res.statusCode = 403;
+        res.headers.contentType = ContentType.json;
+        res.write(jsonEncode({'error': 'invalid_pin'}));
+        await res.close();
+        return;
+      }
+      final body = await utf8.decoder.bind(req).join();
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is! Map) {
+          res.statusCode = 400;
+          res.write(jsonEncode({'error': 'invalid_body'}));
+          await res.close();
+          return;
+        }
+        await LocalListIo.applyDecodedMap(
+          Map<String, dynamic>.from(decoded),
+          replace: false,
+        );
+        res.headers.contentType = ContentType.json;
+        res.write(jsonEncode({'ok': true}));
+      } catch (e) {
+        res.statusCode = 500;
+        res.write(jsonEncode({'error': '$e'}));
+      }
       await res.close();
       return;
     }
@@ -200,12 +291,9 @@ class LocalLanSyncHost {
   }
 }
 
-/// 扫描局域网并拉取合并
 class LocalLanSyncClient {
   LocalLanSyncClient._();
-  static final LocalLanSyncClient instance = LocalLanSyncClient._();
 
-  /// 广播探测，收集附近主机（默认约 2.5s）
   static Future<List<LanPeer>> discover({
     Duration timeout = const Duration(milliseconds: 2500),
   }) async {
@@ -215,10 +303,7 @@ class LocalLanSyncClient {
       sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       sock.broadcastEnabled = true;
       final probe = utf8.encode(LocalLanSync.magicProbe);
-      final targets = <InternetAddress>[
-        InternetAddress('255.255.255.255'),
-      ];
-      // 子网广播
+      final targets = <InternetAddress>[InternetAddress('255.255.255.255')];
       for (final ip in await LocalLanSync.localIPv4s()) {
         final parts = ip.split('.');
         if (parts.length == 4) {
@@ -246,22 +331,21 @@ class LocalLanSyncClient {
         final msg = utf8.decode(dg.data, allowMalformed: true);
         if (!msg.startsWith('${LocalLanSync.magicAnnounce}|')) return;
         try {
-          final json = jsonDecode(msg.substring(LocalLanSync.magicAnnounce.length + 1));
+          final json =
+              jsonDecode(msg.substring(LocalLanSync.magicAnnounce.length + 1));
           if (json is! Map) return;
           final port = json['port'];
           final deviceId = '${json['deviceId'] ?? ''}';
           final name = '${json['name'] ?? 'PiliPlus'}';
-          final p = port is int ? port : int.tryParse('$port') ?? LocalLanSync.httpPort;
-          if (deviceId.isEmpty) return;
-          // 跳过本机
-          if (deviceId == LocalLanSync.deviceId()) return;
-          final peer = LanPeer(
+          final p =
+              port is int ? port : int.tryParse('$port') ?? LocalLanSync.httpPort;
+          if (deviceId.isEmpty || deviceId == LocalLanSync.deviceId()) return;
+          found[deviceId] = LanPeer(
             name: name,
             host: dg.address.address,
             port: p,
             deviceId: deviceId,
           );
-          found[deviceId] = peer;
         } catch (_) {}
       });
 
@@ -276,24 +360,29 @@ class LocalLanSyncClient {
     return found.values.toList();
   }
 
-  /// 拉取对方快照并合并到本机（默认 merge，不覆盖删除）
   static Future<bool> pullAndMerge({
     required LanPeer peer,
     required String pin,
     bool replace = false,
+    List<String>? categories,
+    bool remember = true,
   }) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 8);
-    client.idleTimeout = const Duration(seconds: 15);
+    client.idleTimeout = const Duration(seconds: 20);
     try {
-      final uri = Uri.parse(
-        '${peer.endpoint}/snapshot?pin=${Uri.encodeQueryComponent(pin)}',
-      );
+      final cats = categories ?? Pref.lanSyncCategories;
+      final q = {
+        'pin': pin,
+        'deviceId': LocalLanSync.deviceId(),
+        if (cats.isNotEmpty) 'categories': cats.join(','),
+      };
+      final uri = Uri.parse('${peer.endpoint}/snapshot').replace(queryParameters: q);
       final req = await client.getUrl(uri);
       final res = await req.close();
       final body = await res.transform(utf8.decoder).join();
       if (res.statusCode == 403) {
-        SmartDialog.showToast('PIN 错误');
+        SmartDialog.showToast('PIN 错误或未授权');
         return false;
       }
       if (res.statusCode != 200) {
@@ -309,6 +398,15 @@ class LocalLanSyncClient {
         Map<String, dynamic>.from(decoded),
         replace: replace,
       );
+      if (remember) {
+        Pref.upsertLanTrustedPeer(
+          deviceId: peer.deviceId,
+          name: peer.name,
+          host: peer.host,
+          port: peer.port,
+          pin: pin,
+        );
+      }
       return true;
     } catch (e) {
       SmartDialog.showToast('同步失败：$e');
@@ -318,20 +416,83 @@ class LocalLanSyncClient {
     }
   }
 
-  static Future<Map<String, dynamic>?> fetchInfo(LanPeer peer) async {
+  /// 将本机快照推送到对方（对方需开启同步源）
+  static Future<bool> pushToPeer({
+    required LanPeer peer,
+    required String pin,
+    List<String>? categories,
+    bool remember = true,
+  }) async {
     final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 4);
+    client.connectionTimeout = const Duration(seconds: 8);
     try {
-      final req = await client.getUrl(Uri.parse('${peer.endpoint}/info'));
+      final payload = LocalLanSync.buildSnapshot(categories: categories);
+      final q = {
+        'pin': pin,
+        'deviceId': LocalLanSync.deviceId(),
+      };
+      final uri = Uri.parse('${peer.endpoint}/push').replace(queryParameters: q);
+      final req = await client.postUrl(uri);
+      req.headers.contentType = ContentType.json;
+      req.write(jsonEncode(payload));
       final res = await req.close();
-      if (res.statusCode != 200) return null;
       final body = await res.transform(utf8.decoder).join();
-      final decoded = jsonDecode(body);
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
-    } catch (_) {
+      if (res.statusCode == 403) {
+        SmartDialog.showToast('PIN 错误或未授权');
+        return false;
+      }
+      if (res.statusCode != 200) {
+        SmartDialog.showToast('推送失败：HTTP ${res.statusCode}');
+        return false;
+      }
+      if (remember) {
+        Pref.upsertLanTrustedPeer(
+          deviceId: peer.deviceId,
+          name: peer.name,
+          host: peer.host,
+          port: peer.port,
+          pin: pin,
+        );
+      }
+      // 解析 ok
+      try {
+        final m = jsonDecode(body);
+        if (m is Map && m['ok'] == true) {
+          SmartDialog.showToast('已推送到对方');
+          return true;
+        }
+      } catch (_) {}
+      SmartDialog.showToast('已推送');
+      return true;
+    } catch (e) {
+      SmartDialog.showToast('推送失败：$e');
+      return false;
     } finally {
       client.close(force: true);
     }
-    return null;
+  }
+
+  /// 启动后自动：扫描已配对设备并静默合并（需开启设置）
+  static Future<void> autoSyncOnce() async {
+    if (!Pref.enableLocalFeatures || !Pref.enableLanAutoSync) return;
+    final trusted = Pref.lanTrustedPeers;
+    if (trusted.isEmpty) return;
+    try {
+      final peers = await discover(timeout: const Duration(seconds: 2));
+      for (final peer in peers) {
+        final t = Pref.findLanTrustedPeer(peer.deviceId);
+        if (t == null) continue;
+        final pin = t['pin']?.toString() ?? '';
+        if (pin.isEmpty) continue;
+        await pullAndMerge(
+          peer: peer,
+          pin: pin,
+          replace: false,
+          remember: true,
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('autoSyncOnce: $e');
+    }
   }
 }

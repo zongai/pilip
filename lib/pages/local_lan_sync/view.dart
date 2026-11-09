@@ -1,4 +1,5 @@
 import 'package:PiliPlus/utils/local_lan_sync.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -13,23 +14,20 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
   final _host = LocalLanSyncHost.instance;
   bool _hosting = false;
   bool _scanning = false;
-  bool _syncing = false;
+  bool _busy = false;
+  bool _autoSync = Pref.enableLanAutoSync;
   List<LanPeer> _peers = [];
   List<String> _localIps = [];
   String? _pin;
+  late Set<String> _cats;
 
   @override
   void initState() {
     super.initState();
+    _cats = Pref.lanSyncCategories.toSet();
     _refreshLocalIps();
     _hosting = _host.isRunning;
     _pin = _host.pin;
-  }
-
-  @override
-  void dispose() {
-    // 离开页面不强制关 host，便于后台继续被发现；用户可手动停止
-    super.dispose();
   }
 
   Future<void> _refreshLocalIps() async {
@@ -75,7 +73,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
       if (mounted) {
         setState(() => _peers = list);
         if (list.isEmpty) {
-          SmartDialog.showToast('未发现附近设备，请确认对方已开启共享');
+          SmartDialog.showToast('未发现附近设备');
         }
       }
     } catch (e) {
@@ -85,33 +83,27 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
     }
   }
 
-  Future<void> _syncFrom(LanPeer peer) async {
-    final pinCtrl = TextEditingController();
+  Future<String?> _askPin(LanPeer peer, {String title = '输入 PIN'}) async {
+    final saved = peer.savedPin;
+    if (saved != null && peer.isTrusted) {
+      // 已配对：直接用保存的 PIN，也可让用户改
+      return saved;
+    }
+    final pinCtrl = TextEditingController(text: saved ?? '');
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('从「${peer.name}」同步'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${peer.host}:${peer.port}\n将合并对方的本地数据（已看/历史、关注、黑名单、播单等），不会清空本机已有内容。',
-              style: Theme.of(ctx).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pinCtrl,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: '对方 PIN',
-                border: OutlineInputBorder(),
-                counterText: '',
-              ),
-            ),
-          ],
+        title: Text(title),
+        content: TextField(
+          controller: pinCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 4,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '对方 PIN',
+            border: OutlineInputBorder(),
+            counterText: '',
+          ),
         ),
         actions: [
           TextButton(
@@ -120,47 +112,89 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('合并同步'),
+            child: const Text('确定'),
           ),
         ],
       ),
     );
     final pin = pinCtrl.text.trim();
     pinCtrl.dispose();
-    if (ok != true || pin.isEmpty) return;
+    if (ok != true || pin.isEmpty) return null;
+    return pin;
+  }
 
-    setState(() => _syncing = true);
-    SmartDialog.showLoading(msg: '同步中…');
+  Future<void> _pull(LanPeer peer) async {
+    final pin = await _askPin(peer, title: '从「${peer.name}」拉取合并');
+    if (pin == null) return;
+    setState(() => _busy = true);
+    SmartDialog.showLoading(msg: '拉取中…');
     try {
-      final success = await LocalLanSyncClient.pullAndMerge(
+      final ok = await LocalLanSyncClient.pullAndMerge(
         peer: peer,
         pin: pin,
-        replace: false,
+        categories: _cats.toList(),
+        remember: true,
       );
-      if (success) {
-        SmartDialog.showToast('同步完成');
+      if (ok) {
+        SmartDialog.showToast('已合并并记住该设备');
+        setState(() {});
       }
     } finally {
       SmartDialog.dismiss();
-      if (mounted) setState(() => _syncing = false);
+      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _push(LanPeer peer) async {
+    final pin = await _askPin(peer, title: '推送到「${peer.name}」');
+    if (pin == null) return;
+    setState(() => _busy = true);
+    SmartDialog.showLoading(msg: '推送中…');
+    try {
+      await LocalLanSyncClient.pushToPeer(
+        peer: peer,
+        pin: pin,
+        categories: _cats.toList(),
+        remember: true,
+      );
+      setState(() {});
+    } finally {
+      SmartDialog.dismiss();
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _saveCats() {
+    Pref.lanSyncCategories = _cats.toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final trusted = Pref.lanTrustedPeers;
     return Scaffold(
       appBar: AppBar(title: const Text('局域网同步')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           Text(
-            '同一 Wi‑Fi 下自动发现附近设备，输入 PIN 后合并同步本地数据（无需登录、不经过公网）。',
+            '同一 Wi‑Fi 下发现设备，PIN 确认后同步。已配对设备可少输 PIN；可勾选同步类型。',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('启动时自动同步已配对设备'),
+            subtitle: const Text('进入应用后扫描并静默合并（需对方开启同步源）'),
+            value: _autoSync,
+            onChanged: (v) {
+              Pref.enableLanAutoSync = v;
+              setState(() => _autoSync = v);
+            },
+          ),
+          const SizedBox(height: 8),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -170,9 +204,9 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('作为同步源'),
-                    subtitle: const Text('开启后可被附近设备发现并拉取本机数据'),
+                    subtitle: const Text('开启后可被发现，并接收对方推送'),
                     value: _hosting,
-                    onChanged: _syncing ? null : _toggleHost,
+                    onChanged: _busy ? null : _toggleHost,
                   ),
                   if (_hosting) ...[
                     const Divider(),
@@ -198,7 +232,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                     ),
                     if (_localIps.isNotEmpty)
                       Text(
-                        '本机地址：${_localIps.map((e) => '$e:${LocalLanSync.httpPort}').join('， ')}',
+                        '本机：${_localIps.map((e) => '$e:${LocalLanSync.httpPort}').join('， ')}',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
@@ -209,16 +243,60 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
             ),
           ),
           const SizedBox(height: 16),
+          Text('同步内容', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 0,
+            children: [
+              for (final e in LocalLanSync.categoryLabels.entries)
+                FilterChip(
+                  label: Text(e.value),
+                  selected: _cats.contains(e.key),
+                  onSelected: (sel) {
+                    setState(() {
+                      if (sel) {
+                        _cats.add(e.key);
+                      } else {
+                        _cats.remove(e.key);
+                      }
+                      _saveCats();
+                    });
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (trusted.isNotEmpty) ...[
+            Text('已配对设备', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            ...trusted.map((t) {
+              final id = '${t['deviceId']}';
+              final name = '${t['name'] ?? id}';
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.verified_user_outlined),
+                title: Text(name),
+                subtitle: Text(id, maxLines: 1, overflow: TextOverflow.ellipsis),
+                trailing: IconButton(
+                  tooltip: '取消配对',
+                  icon: const Icon(Icons.link_off),
+                  onPressed: () {
+                    Pref.removeLanTrustedPeer(id);
+                    setState(() {});
+                  },
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '附近设备',
-                  style: theme.textTheme.titleMedium,
-                ),
+                child: Text('附近设备', style: theme.textTheme.titleMedium),
               ),
               FilledButton.tonalIcon(
-                onPressed: _scanning || _syncing ? null : _scan,
+                onPressed: _scanning || _busy ? null : _scan,
                 icon: _scanning
                     ? const SizedBox(
                         width: 16,
@@ -233,10 +311,10 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           const SizedBox(height: 8),
           if (_peers.isEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  _scanning ? '正在搜索…' : '点击扫描发现附近已开启共享的设备',
+                  _scanning ? '正在搜索…' : '点击扫描发现设备',
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
               ),
@@ -244,23 +322,46 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           else
             ..._peers.map(
               (p) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.phone_android),
-                  title: Text(p.name),
-                  subtitle: Text('${p.host}:${p.port}'),
-                  trailing: FilledButton(
-                    onPressed: _syncing ? null : () => _syncFrom(p),
-                    child: const Text('同步'),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          p.isTrusted ? Icons.verified : Icons.phone_android,
+                        ),
+                        title: Text(
+                          p.isTrusted ? '${p.name}（已配对）' : p.name,
+                        ),
+                        subtitle: Text('${p.host}:${p.port}'),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: _busy ? null : () => _push(p),
+                            child: const Text('推送到对方'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: _busy ? null : () => _pull(p),
+                            child: Text(p.isTrusted ? '拉取合并' : '同步'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
             '说明\n'
-            '· 同步内容：本地关注、黑名单、播单、历史/已看、稍后再看、合集、搜索历史等\n'
-            '· 默认合并：只增不覆盖删除；进度取较新/较大\n'
-            '· 请仅在可信设备间使用，PIN 勿告知他人',
+            '· 拉取：合并对方数据到本机；推送：把本机数据合并到对方\n'
+            '· 成功后自动配对，下次可少输 PIN；启动自动同步仅对已配对设备\n'
+            '· 仅在可信设备与同一 Wi‑Fi 下使用',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
               height: 1.5,

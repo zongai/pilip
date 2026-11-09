@@ -104,6 +104,95 @@ abstract final class Pref {
   static set enableLocalFeatures(bool v) =>
       _setting.put(SettingBoxKey.enableLocalFeatures, v);
 
+  static bool get enableLanAutoSync =>
+      _setting.get(SettingBoxKey.enableLanAutoSync, defaultValue: false);
+
+  static set enableLanAutoSync(bool v) =>
+      _setting.put(SettingBoxKey.enableLanAutoSync, v);
+
+  static const List<String> lanSyncCategoryAll = [
+    'follows',
+    'blacklist',
+    'playlists',
+    'videoPlaylists',
+    'seasons',
+    'history',
+    'later',
+    'searchHistory',
+    'favHideKeywords',
+  ];
+
+  static List<String> get lanSyncCategories {
+    final raw = _setting.get(SettingBoxKey.lanSyncCategories);
+    if (raw is List && raw.isNotEmpty) {
+      return [for (final e in raw) '$e'];
+    }
+    return List<String>.from(lanSyncCategoryAll);
+  }
+
+  static set lanSyncCategories(List<String> v) =>
+      _setting.put(SettingBoxKey.lanSyncCategories, v);
+
+  static String get lanDeviceId {
+    final existing = _localCache.get(LocalCacheKey.lanDeviceId);
+    if (existing is String && existing.isNotEmpty) return existing;
+    final id =
+        '${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}-${DateTime.now().microsecond.toRadixString(16)}';
+    _localCache.put(LocalCacheKey.lanDeviceId, id);
+    return id;
+  }
+
+  static List<Map> get lanTrustedPeers {
+    final raw = _localCache.get(LocalCacheKey.lanTrustedPeers, defaultValue: <dynamic>[]);
+    if (raw is! List) return [];
+    return [
+      for (final e in raw)
+        if (e is Map) Map<String, dynamic>.from(e)
+    ];
+  }
+
+  static set lanTrustedPeers(List<Map> list) =>
+      _localCache.put(LocalCacheKey.lanTrustedPeers, list);
+
+  static void upsertLanTrustedPeer({
+    required String deviceId,
+    required String name,
+    String? host,
+    int? port,
+    String? pin,
+  }) {
+    final list = List<Map>.from(lanTrustedPeers);
+    final i = list.indexWhere((e) => '${e['deviceId']}' == deviceId);
+    final row = <String, dynamic>{
+      'deviceId': deviceId,
+      'name': name,
+      if (host != null) 'host': host,
+      if (port != null) 'port': port,
+      if (pin != null) 'pin': pin,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (i >= 0) {
+      list[i] = {...Map<String, dynamic>.from(list[i]), ...row};
+    } else {
+      list.add(row);
+    }
+    lanTrustedPeers = list;
+  }
+
+  static void removeLanTrustedPeer(String deviceId) {
+    lanTrustedPeers = [
+      for (final e in lanTrustedPeers)
+        if ('${e['deviceId']}' != deviceId) e
+    ];
+  }
+
+  static Map? findLanTrustedPeer(String deviceId) {
+    for (final e in lanTrustedPeers) {
+      if ('${e['deviceId']}' == deviceId) return e;
+    }
+    return null;
+  }
+
   /// 收藏/合集列表按标题关键字隐藏
   static bool get hideFavByKeywords =>
       _setting.get(SettingBoxKey.hideFavByKeywords, defaultValue: false);
