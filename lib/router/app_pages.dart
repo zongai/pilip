@@ -10,6 +10,7 @@ import 'package:PiliPlus/pages/local_playlist/view.dart';
 import 'package:PiliPlus/pages/local_season/view.dart';
 import 'package:PiliPlus/pages/fav_hide_keyword/view.dart';
 import 'package:PiliPlus/pages/local_data_qr/view.dart';
+import 'package:PiliPlus/pages/local_lan_sync/view.dart';
 import 'package:PiliPlus/pages/local_video_playlist/view.dart';
 
 import 'package:PiliPlus/pages/bubble/view.dart';
@@ -128,6 +129,7 @@ class Routes {
     GetPage(name: '/localSeasonPage', page: () => const LocalSeasonPage()),
     GetPage(name: '/favHideKeywordPage', page: () => const FavHideKeywordPage()),
     GetPage(name: '/localDataQrPage', page: () => const LocalDataQrPage()),
+    GetPage(name: '/localLanSyncPage', page: () => const LocalLanSyncPage()),
     GetPage(name: '/localVideoPlaylistPage', page: () => const LocalVideoPlaylistPage()),
 
     GetPage(name: '/colorSetting', page: () => const ColorSelectPage()),

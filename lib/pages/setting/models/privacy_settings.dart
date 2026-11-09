@@ -79,6 +79,14 @@ List<SettingsModel> get privacySettings => [
     ),
     NormalModel(
       onTap: (context, setState) {
+        Get.toNamed('/localLanSyncPage');
+      },
+      title: '局域网同步',
+      subtitle: '同一 Wi‑Fi 自动发现设备，PIN 确认后合并本地数据',
+      leading: const Icon(Icons.wifi_tethering),
+    ),
+    NormalModel(
+      onTap: (context, setState) {
         _showLocalDataIoSheet(context);
       },
       title: '本地数据导入导出',
