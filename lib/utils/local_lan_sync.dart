@@ -46,7 +46,31 @@ abstract final class LocalLanSync {
   /// 跨启动稳定的设备 ID
   static String deviceId() => Pref.lanDeviceId;
 
-  static Future<List<String>> localIPv4s() async {
+  static bool _isPrivateLan(String ip) {
+    final p = ip.split('.');
+    if (p.length != 4) return false;
+    final a = int.tryParse(p[0]) ?? -1;
+    final b = int.tryParse(p[1]) ?? -1;
+    if (a == 10) return true;
+    if (a == 192 && b == 168) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    return false;
+  }
+
+  /// 是否像虚拟网卡 / VPN / 容器网段（展示时靠后）
+  static bool _isLikelyVirtual(String ip) {
+    final p = ip.split('.');
+    if (p.length != 4) return true;
+    final a = int.tryParse(p[0]) ?? -1;
+    final b = int.tryParse(p[1]) ?? -1;
+    // 常见 Docker / Hyper-V / iOS 蜂窝共享 / 部分 VPN
+    if (a == 198 && b == 19) return true; // 截图中的 198.19.0.1
+    if (a == 172 && b == 17) return true;
+    if (a == 100 && b == 64) return true; // CGNAT
+    return false;
+  }
+
+  static Future<List<String>> localIPv4s({bool preferredFirst = true}) async {
     final out = <String>[];
     try {
       for (final ni in await NetworkInterface.list(
@@ -60,7 +84,26 @@ abstract final class LocalLanSync {
     } catch (e) {
       if (kDebugMode) debugPrint('localIPv4s: $e');
     }
+    if (!preferredFirst) return out;
+    out.sort((x, y) {
+      int score(String ip) {
+        if (_isPrivateLan(ip) && !_isLikelyVirtual(ip)) return 0;
+        if (_isPrivateLan(ip)) return 1;
+        return 2;
+      }
+      final c = score(x).compareTo(score(y));
+      return c != 0 ? c : x.compareTo(y);
+    });
     return out;
+  }
+
+  /// 给对方填写的推荐地址（优先 192.168/10/172.16 非虚拟）
+  static Future<String?> recommendedLanIp() async {
+    final list = await localIPv4s();
+    for (final ip in list) {
+      if (_isPrivateLan(ip) && !_isLikelyVirtual(ip)) return ip;
+    }
+    return list.isEmpty ? null : list.first;
   }
 
   /// 按勾选类别过滤快照 data
@@ -282,6 +325,7 @@ class LocalLanSyncHost {
 
     if (path == '/info' && req.method == 'GET') {
       final payload = LocalLanSync.buildSnapshot();
+      final addrs = await LocalLanSync.localIPv4s();
       res.headers.contentType = ContentType.json;
       res.write(jsonEncode({
         'name': name,
@@ -289,6 +333,8 @@ class LocalLanSyncHost {
         'service': LocalLanSync.serviceName,
         'counts': payload['counts'] ?? {},
         'exportedAt': payload['exportedAt'],
+        'addresses': addrs,
+        'port': LocalLanSync.httpPort,
       }));
       await res.close();
       return;

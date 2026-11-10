@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -86,13 +87,20 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
       host = raw.substring(0, i);
       port = int.tryParse(raw.substring(i + 1)) ?? LocalLanSync.httpPort;
     }
+    final mine = await LocalLanSync.localIPv4s();
+    if (mine.contains(host)) {
+      SmartDialog.showToast('这是本机地址，请填写对方「本机」列表中的 IP');
+      return;
+    }
     setState(() => _busy = true);
+    SmartDialog.showLoading(msg: '连接 $host:$port …');
     try {
       final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 3);
+      client.connectionTimeout = const Duration(seconds: 10);
+      client.idleTimeout = const Duration(seconds: 12);
       final uri = Uri.parse('http://$host:$port/info');
       final req = await client.getUrl(uri);
-      final res = await req.close();
+      final res = await req.close().timeout(const Duration(seconds: 12));
       final body = await res.transform(utf8.decoder).join();
       client.close(force: true);
       if (res.statusCode != 200) {
@@ -115,10 +123,26 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           _peers = [peer, ..._peers.where((e) => e.deviceId != peer.deviceId)];
         });
       }
-      SmartDialog.showToast('已添加 ${peer.name}');
+      final addrs = json['addresses'];
+      final extra = addrs is List && addrs.isNotEmpty
+          ? '（对方：${addrs.take(3).join(", ")}）'
+          : '';
+      SmartDialog.showToast('已连接 ${peer.name}$extra');
+    } on SocketException catch (e) {
+      final timedOut = e.message.contains('timed out') ||
+          e.message.contains('Timeout') ||
+          (e.osError?.errorCode == 110);
+      SmartDialog.showToast(
+        timedOut
+            ? '连接超时 $host:$port。请确认对方已开同步源、IP 为对方 192.168.x（非 VPN），且防火墙放行'
+            : '连接失败：$e',
+      );
+    } on TimeoutException {
+      SmartDialog.showToast('连接超时。请使用对方本机显示的 192.168.x 地址，并检查防火墙');
     } catch (e) {
       SmartDialog.showToast('连接失败：$e');
     } finally {
+      SmartDialog.dismiss();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -294,13 +318,24 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                         },
                       ),
                     ),
-                    if (_localIps.isNotEmpty)
+                    if (_localIps.isNotEmpty) ...[
                       Text(
-                        '本机：${_localIps.map((e) => '$e:${LocalLanSync.httpPort}').join('， ')}',
+                        '请让对方填写第一项（优先 192.168.x，勿用 VPN/虚拟网卡）',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        _localIps
+                            .map((e) => '$e:${LocalLanSync.httpPort}')
+                            .join('
+'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
