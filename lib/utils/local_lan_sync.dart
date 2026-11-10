@@ -15,6 +15,9 @@ abstract final class LocalLanSync {
   static const String magicProbe = 'PILIP_SYNC_PROBE';
   static const String magicAnnounce = 'PILIP_SYNC_ANNOUNCE';
   static const String serviceName = 'PiliPlus';
+  /// 局域网组播地址（部分 WiFi 会屏蔽 255.255.255.255 广播）
+  static final InternetAddress multicastAddr =
+      InternetAddress('239.255.37.218');
 
   static const Map<String, String> categoryLabels = {
     'follows': '本地关注',
@@ -128,6 +131,7 @@ class LocalLanSyncHost {
   HttpServer? _http;
   RawDatagramSocket? _udp;
   StreamSubscription? _udpSub;
+  Timer? _announceTimer;
   String? pin;
   bool get isRunning => _http != null;
 
@@ -158,30 +162,74 @@ class LocalLanSyncHost {
     try {
       _udp!.broadcastEnabled = true;
     } catch (_) {}
+    try {
+      _udp!.joinMulticast(LocalLanSync.multicastAddr);
+    } catch (_) {}
+
+    List<int> buildAnnounceBytes() {
+      final announce = jsonEncode({
+        'name': name,
+        'port': LocalLanSync.httpPort,
+        'deviceId': id,
+        'pinRequired': true,
+      });
+      return utf8.encode('${LocalLanSync.magicAnnounce}|$announce');
+    }
+
+    Future<void> broadcastAnnounce([InternetAddress? to, int? port]) async {
+      final bytes = buildAnnounceBytes();
+      final targets = <InternetAddress>[
+        InternetAddress('255.255.255.255'),
+        LocalLanSync.multicastAddr,
+      ];
+      for (final ip in await LocalLanSync.localIPv4s()) {
+        final parts = ip.split('.');
+        if (parts.length == 4) {
+          targets.add(
+            InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'),
+          );
+        }
+      }
+      if (to != null) {
+        try {
+          _udp!.send(bytes, to, port ?? LocalLanSync.udpPort);
+        } catch (_) {}
+      }
+      for (final t in targets) {
+        try {
+          _udp!.send(bytes, t, LocalLanSync.udpPort);
+        } catch (_) {}
+      }
+    }
+
     _udpSub = _udp!.listen((event) {
       if (event != RawSocketEvent.read) return;
       final dg = _udp!.receive();
       if (dg == null) return;
       final msg = utf8.decode(dg.data, allowMalformed: true);
       if (msg.startsWith(LocalLanSync.magicProbe)) {
-        final announce = jsonEncode({
-          'name': name,
-          'port': LocalLanSync.httpPort,
-          'deviceId': id,
-          'pinRequired': true,
-        });
-        final bytes = utf8.encode('${LocalLanSync.magicAnnounce}|$announce');
-        try {
-          _udp!.send(bytes, dg.address, dg.port);
-          _udp!.send(bytes, dg.address, LocalLanSync.udpPort);
-        } catch (_) {}
+        // 回源端口 + 固定端口，兼容不同系统
+        broadcastAnnounce(dg.address, dg.port);
+        broadcastAnnounce(dg.address, LocalLanSync.udpPort);
       }
     });
+
+    // 主动周期宣告，避免对方探测包被路由器丢掉
+    _announceTimer?.cancel();
+    _announceTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      broadcastAnnounce();
+    });
+    await broadcastAnnounce();
   }
 
   Future<void> stop() async {
+    _announceTimer?.cancel();
+    _announceTimer = null;
     await _udpSub?.cancel();
     _udpSub = null;
+    try {
+      _udp?.leaveMulticast(LocalLanSync.multicastAddr);
+    } catch (_) {}
     _udp?.close();
     _udp = null;
     await _http?.close(force: true);
@@ -295,19 +343,71 @@ class LocalLanSyncClient {
   LocalLanSyncClient._();
 
   static Future<List<LanPeer>> discover({
-    Duration timeout = const Duration(milliseconds: 2500),
+    Duration timeout = const Duration(seconds: 4),
   }) async {
     final found = <String, LanPeer>{};
+
+    void addPeer({
+      required String deviceId,
+      required String name,
+      required String host,
+      required int port,
+    }) {
+      if (deviceId.isEmpty || deviceId == LocalLanSync.deviceId()) return;
+      // 忽略本机回环
+      if (host == '127.0.0.1' || host == '0.0.0.0') return;
+      found[deviceId] = LanPeer(
+        name: name,
+        host: host,
+        port: port,
+        deviceId: deviceId,
+      );
+    }
+
+    void parseAnnounce(String msg, String fromHost) {
+      if (!msg.startsWith('${LocalLanSync.magicAnnounce}|')) return;
+      try {
+        final json =
+            jsonDecode(msg.substring(LocalLanSync.magicAnnounce.length + 1));
+        if (json is! Map) return;
+        final port = json['port'];
+        final deviceId = '${json['deviceId'] ?? ''}';
+        final name = '${json['name'] ?? 'PiliPlus'}';
+        final p =
+            port is int ? port : int.tryParse('$port') ?? LocalLanSync.httpPort;
+        addPeer(
+          deviceId: deviceId,
+          name: name,
+          host: fromHost,
+          port: p,
+        );
+      } catch (_) {}
+    }
+
+    // ---- UDP 广播 + 组播探测 ----
     RawDatagramSocket? sock;
     try {
-      sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      sock = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        0,
+        reuseAddress: true,
+      );
       sock.broadcastEnabled = true;
+      try {
+        sock.joinMulticast(LocalLanSync.multicastAddr);
+      } catch (_) {}
+
       final probe = utf8.encode(LocalLanSync.magicProbe);
-      final targets = <InternetAddress>[InternetAddress('255.255.255.255')];
+      final targets = <InternetAddress>[
+        InternetAddress('255.255.255.255'),
+        LocalLanSync.multicastAddr,
+      ];
       for (final ip in await LocalLanSync.localIPv4s()) {
         final parts = ip.split('.');
         if (parts.length == 4) {
-          targets.add(InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'));
+          targets.add(
+            InternetAddress('${parts[0]}.${parts[1]}.${parts[2]}.255'),
+          );
         }
       }
 
@@ -320,7 +420,7 @@ class LocalLanSyncClient {
       }
 
       sendProbes();
-      final timer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      final timer = Timer.periodic(const Duration(milliseconds: 400), (_) {
         sendProbes();
       });
 
@@ -329,36 +429,104 @@ class LocalLanSyncClient {
         final dg = sock!.receive();
         if (dg == null) return;
         final msg = utf8.decode(dg.data, allowMalformed: true);
-        if (!msg.startsWith('${LocalLanSync.magicAnnounce}|')) return;
-        try {
-          final json =
-              jsonDecode(msg.substring(LocalLanSync.magicAnnounce.length + 1));
-          if (json is! Map) return;
-          final port = json['port'];
-          final deviceId = '${json['deviceId'] ?? ''}';
-          final name = '${json['name'] ?? 'PiliPlus'}';
-          final p =
-              port is int ? port : int.tryParse('$port') ?? LocalLanSync.httpPort;
-          if (deviceId.isEmpty || deviceId == LocalLanSync.deviceId()) return;
-          found[deviceId] = LanPeer(
-            name: name,
-            host: dg.address.address,
-            port: p,
-            deviceId: deviceId,
-          );
-        } catch (_) {}
+        parseAnnounce(msg, dg.address.address);
       });
 
       await Future<void>.delayed(timeout);
       timer.cancel();
       await sub.cancel();
     } catch (e) {
-      if (kDebugMode) debugPrint('discover: $e');
+      if (kDebugMode) debugPrint('discover udp: $e');
     } finally {
+      try {
+        sock?.leaveMulticast(LocalLanSync.multicastAddr);
+      } catch (_) {}
       sock?.close();
     }
+
+    // ---- UDP 未果：HTTP 扫同网段 /info（应对广播被禁）----
+    if (found.isEmpty) {
+      try {
+        await _httpDiscover(found, addPeer);
+      } catch (e) {
+        if (kDebugMode) debugPrint('discover http: $e');
+      }
+    }
+
     return found.values.toList();
   }
+
+  static Future<void> _httpDiscover(
+    Map<String, LanPeer> found,
+    void Function({
+      required String deviceId,
+      required String name,
+      required String host,
+      required int port,
+    }) addPeer,
+  ) async {
+    final bases = <String>{};
+    for (final ip in await LocalLanSync.localIPv4s()) {
+      final parts = ip.split('.');
+      if (parts.length == 4) {
+        bases.add('${parts[0]}.${parts[1]}.${parts[2]}');
+      }
+    }
+    if (bases.isEmpty) return;
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(milliseconds: 350);
+    client.idleTimeout = const Duration(milliseconds: 350);
+
+    Future<void> tryHost(String host) async {
+      if (found.isNotEmpty) return;
+      try {
+        final uri = Uri.parse(
+          'http://$host:${LocalLanSync.httpPort}/info',
+        );
+        final req = await client.getUrl(uri);
+        final res = await req.close().timeout(const Duration(milliseconds: 400));
+        if (res.statusCode != 200) {
+          await res.drain<void>();
+          return;
+        }
+        final body = await res.transform(utf8.decoder).join();
+        final json = jsonDecode(body);
+        if (json is! Map) return;
+        if ('${json['service']}' != LocalLanSync.serviceName &&
+            json['deviceId'] == null) {
+          return;
+        }
+        addPeer(
+          deviceId: '${json['deviceId'] ?? ''}',
+          name: '${json['name'] ?? 'PiliPlus'}',
+          host: host,
+          port: LocalLanSync.httpPort,
+        );
+      } catch (_) {}
+    }
+
+    // 优先扫常见网关段，再扫全段（限并发）
+    final hosts = <String>[];
+    for (final b in bases) {
+      for (final last in [1, 2, 100, 101, 102, 200, 254]) {
+        hosts.add('$b.$last');
+      }
+      for (var i = 1; i <= 254; i++) {
+        final h = '$b.$i';
+        if (!hosts.contains(h)) hosts.add(h);
+      }
+    }
+
+    const concurrency = 32;
+    for (var i = 0; i < hosts.length; i += concurrency) {
+      if (found.isNotEmpty) break;
+      final batch = hosts.sublist(i, min(i + concurrency, hosts.length));
+      await Future.wait(batch.map(tryHost));
+    }
+    client.close(force: true);
+  }
+
 
   static Future<bool> pullAndMerge({
     required LanPeer peer,

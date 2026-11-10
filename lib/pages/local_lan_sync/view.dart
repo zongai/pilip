@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:PiliPlus/utils/local_lan_sync.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -20,6 +23,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
   List<String> _localIps = [];
   String? _pin;
   late Set<String> _cats;
+  final _ipCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -28,6 +32,12 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
     _refreshLocalIps();
     _hosting = _host.isRunning;
     _pin = _host.pin;
+  }
+
+  @override
+  void dispose() {
+    _ipCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _refreshLocalIps() async {
@@ -62,6 +72,57 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
     }
   }
 
+
+  Future<void> _connectManual() async {
+    final raw = _ipCtrl.text.trim();
+    if (raw.isEmpty) {
+      SmartDialog.showToast('请输入对方 IP');
+      return;
+    }
+    var host = raw;
+    var port = LocalLanSync.httpPort;
+    if (raw.contains(':')) {
+      final i = raw.lastIndexOf(':');
+      host = raw.substring(0, i);
+      port = int.tryParse(raw.substring(i + 1)) ?? LocalLanSync.httpPort;
+    }
+    setState(() => _busy = true);
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 3);
+      final uri = Uri.parse('http://$host:$port/info');
+      final req = await client.getUrl(uri);
+      final res = await req.close();
+      final body = await res.transform(utf8.decoder).join();
+      client.close(force: true);
+      if (res.statusCode != 200) {
+        SmartDialog.showToast('连接失败：HTTP ${res.statusCode}');
+        return;
+      }
+      final json = jsonDecode(body);
+      if (json is! Map) {
+        SmartDialog.showToast('无效响应');
+        return;
+      }
+      final peer = LanPeer(
+        name: '${json['name'] ?? host}',
+        host: host,
+        port: port,
+        deviceId: '${json['deviceId'] ?? host}',
+      );
+      if (mounted) {
+        setState(() {
+          _peers = [peer, ..._peers.where((e) => e.deviceId != peer.deviceId)];
+        });
+      }
+      SmartDialog.showToast('已添加 ${peer.name}');
+    } catch (e) {
+      SmartDialog.showToast('连接失败：$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _scan() async {
     if (_scanning) return;
     setState(() {
@@ -73,7 +134,10 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
       if (mounted) {
         setState(() => _peers = list);
         if (list.isEmpty) {
-          SmartDialog.showToast('未发现附近设备');
+          SmartDialog.showToast(
+            '未发现附近设备。请确认对方已开启同步、同一 WiFi，并检查防火墙',
+            displayTime: const Duration(seconds: 4),
+          );
         }
       }
     } catch (e) {
@@ -309,12 +373,38 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
             ],
           ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _ipCtrl,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    labelText: '手动 IP',
+                    hintText: '例如 192.168.1.8',
+                  ),
+                  keyboardType: TextInputType.url,
+                  onSubmitted: (_) => _connectManual(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _busy ? null : _connectManual,
+                child: const Text('连接'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           if (_peers.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
-                  _scanning ? '正在搜索…' : '点击扫描发现设备',
+                  _scanning
+                      ? '正在搜索（广播 + 网段探测）…'
+                      : '点击扫描。对方须先开启「允许同步」且同一 WiFi',
+                  textAlign: TextAlign.center,
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
               ),
