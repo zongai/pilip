@@ -54,7 +54,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           _pin = _host.pin;
         });
         await _refreshLocalIps();
-        SmartDialog.showToast('已开启，PIN：${_host.pin}');
+        SmartDialog.showToast('已开启，PIN：${_host.pin}。若对方扫不到，请在系统防火墙允许本应用的专用网络访问');
       } else {
         await _host.stop();
         setState(() {

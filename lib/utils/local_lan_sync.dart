@@ -208,9 +208,16 @@ class LocalLanSyncHost {
       if (dg == null) return;
       final msg = utf8.decode(dg.data, allowMalformed: true);
       if (msg.startsWith(LocalLanSync.magicProbe)) {
-        // 回源端口 + 固定端口，兼容不同系统
-        broadcastAnnounce(dg.address, dg.port);
-        broadcastAnnounce(dg.address, LocalLanSync.udpPort);
+        final bytes = buildAnnounceBytes();
+        // 关键：单播回探测方的源地址/源端口（iOS 扫描依赖此路径）
+        try {
+          _udp!.send(bytes, dg.address, dg.port);
+        } catch (_) {}
+        try {
+          _udp!.send(bytes, dg.address, LocalLanSync.udpPort);
+        } catch (_) {}
+        // 再广播，供监听固定端口的客户端
+        broadcastAnnounce();
       }
     });
 
@@ -384,17 +391,45 @@ class LocalLanSyncClient {
       } catch (_) {}
     }
 
-    // ---- UDP 广播 + 组播探测 ----
-    RawDatagramSocket? sock;
+    // ---- UDP：探测套接字(临时端口) + 监听套接字(固定端口收广播) ----
+    RawDatagramSocket? sockProbe;
+    RawDatagramSocket? sockListen;
+    StreamSubscription? subProbe;
+    StreamSubscription? subListen;
+    Timer? timer;
     try {
-      sock = await RawDatagramSocket.bind(
+      sockProbe = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         0,
         reuseAddress: true,
       );
-      sock.broadcastEnabled = true;
+      sockProbe.broadcastEnabled = true;
+
+      // iOS 等客户端必须监听固定端口，才能收到 PC 主动宣告/广播
       try {
-        sock.joinMulticast(LocalLanSync.multicastAddr);
+        sockListen = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          LocalLanSync.udpPort,
+          reuseAddress: true,
+        );
+        sockListen.broadcastEnabled = true;
+        try {
+          sockListen.joinMulticast(LocalLanSync.multicastAddr);
+        } catch (_) {}
+        subListen = sockListen.listen((event) {
+          if (event != RawSocketEvent.read) return;
+          final dg = sockListen!.receive();
+          if (dg == null) return;
+          final msg = utf8.decode(dg.data, allowMalformed: true);
+          parseAnnounce(msg, dg.address.address);
+        });
+      } catch (e) {
+        // 本机已作同步源占用端口时忽略
+        if (kDebugMode) debugPrint('discover listen 37218: $e');
+      }
+
+      try {
+        sockProbe.joinMulticast(LocalLanSync.multicastAddr);
       } catch (_) {}
 
       final probe = utf8.encode(LocalLanSync.magicProbe);
@@ -414,43 +449,46 @@ class LocalLanSyncClient {
       void sendProbes() {
         for (final t in targets) {
           try {
-            sock!.send(probe, t, LocalLanSync.udpPort);
+            sockProbe!.send(probe, t, LocalLanSync.udpPort);
           } catch (_) {}
         }
       }
 
-      sendProbes();
-      final timer = Timer.periodic(const Duration(milliseconds: 400), (_) {
-        sendProbes();
-      });
-
-      final sub = sock.listen((event) {
+      subProbe = sockProbe.listen((event) {
         if (event != RawSocketEvent.read) return;
-        final dg = sock!.receive();
+        final dg = sockProbe!.receive();
         if (dg == null) return;
         final msg = utf8.decode(dg.data, allowMalformed: true);
         parseAnnounce(msg, dg.address.address);
       });
 
+      sendProbes();
+      timer = Timer.periodic(const Duration(milliseconds: 350), (_) {
+        sendProbes();
+      });
+
       await Future<void>.delayed(timeout);
-      timer.cancel();
-      await sub.cancel();
     } catch (e) {
       if (kDebugMode) debugPrint('discover udp: $e');
     } finally {
+      timer?.cancel();
+      await subProbe?.cancel();
+      await subListen?.cancel();
       try {
-        sock?.leaveMulticast(LocalLanSync.multicastAddr);
+        sockProbe?.leaveMulticast(LocalLanSync.multicastAddr);
       } catch (_) {}
-      sock?.close();
+      try {
+        sockListen?.leaveMulticast(LocalLanSync.multicastAddr);
+      } catch (_) {}
+      sockProbe?.close();
+      sockListen?.close();
     }
 
-    // ---- UDP 未果：HTTP 扫同网段 /info（应对广播被禁）----
-    if (found.isEmpty) {
-      try {
-        await _httpDiscover(found, addPeer);
-      } catch (e) {
-        if (kDebugMode) debugPrint('discover http: $e');
-      }
+    // ---- HTTP 扫同网段 /info（Windows 防火墙常拦 UDP，TCP 放行后仍可发现）----
+    try {
+      await _httpDiscover(found, addPeer);
+    } catch (e) {
+      if (kDebugMode) debugPrint('discover http: $e');
     }
 
     return found.values.toList();
@@ -479,7 +517,6 @@ class LocalLanSyncClient {
     client.idleTimeout = const Duration(milliseconds: 350);
 
     Future<void> tryHost(String host) async {
-      if (found.isNotEmpty) return;
       try {
         final uri = Uri.parse(
           'http://$host:${LocalLanSync.httpPort}/info',
@@ -518,9 +555,11 @@ class LocalLanSyncClient {
       }
     }
 
-    const concurrency = 32;
+    const concurrency = 48;
+    // 限制总耗时约 6s，优先扫完常见地址
+    final deadline = DateTime.now().add(const Duration(seconds: 6));
     for (var i = 0; i < hosts.length; i += concurrency) {
-      if (found.isNotEmpty) break;
+      if (DateTime.now().isAfter(deadline)) break;
       final batch = hosts.sublist(i, min(i + concurrency, hosts.length));
       await Future.wait(batch.map(tryHost));
     }
