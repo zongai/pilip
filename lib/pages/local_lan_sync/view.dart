@@ -336,10 +336,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                       ),
                       const SizedBox(height: 4),
                       SelectableText(
-                        _localIps
-                            .map((e) => '$e:${LocalLanSync.httpPort}')
-                            .join('
-'),
+                        _localIps.map((e) => '$e:${LocalLanSync.httpPort}').join('\n'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontFamily: 'monospace',
                         ),
