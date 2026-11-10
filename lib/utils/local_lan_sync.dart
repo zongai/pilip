@@ -130,7 +130,17 @@ abstract final class LocalLanSync {
     };
   }
 
+  static Map<String, String> clientQuery({Map<String, String>? extra}) {
+    return {
+      'clientDeviceId': deviceId(),
+      'clientName': _deviceName ?? 'PiliPlus',
+      'clientPort': '$httpPort',
+      ...?extra,
+    };
+  }
+
   static Map<String, dynamic> buildSnapshot({List<String>? categories}) {
+
     return filterPayload(LocalListIo.buildFullPayload(), categories: categories);
   }
 }
@@ -177,6 +187,34 @@ class LocalLanSyncHost {
   Timer? _announceTimer;
   String? pin;
   bool get isRunning => _http != null;
+
+  /// 主动连入本机的设备（对方能连你、你连不回时用这里的 IP）
+  final Map<String, LanPeer> recentVisitors = {};
+  final _visitorsCtrl = StreamController<List<LanPeer>>.broadcast();
+  Stream<List<LanPeer>> get visitors$ => _visitorsCtrl.stream;
+  List<LanPeer> get visitorList => recentVisitors.values.toList();
+
+  void _noteVisitor({
+    required String host,
+    required String deviceId,
+    required String name,
+    int port = LocalLanSync.httpPort,
+  }) {
+    if (host.isEmpty || host == '127.0.0.1') return;
+    if (deviceId.isEmpty) {
+      deviceId = 'ip-$host';
+    }
+    if (deviceId == LocalLanSync.deviceId()) return;
+    recentVisitors[deviceId] = LanPeer(
+      name: name.isEmpty ? host : name,
+      host: host,
+      port: port,
+      deviceId: deviceId,
+    );
+    if (!_visitorsCtrl.isClosed) {
+      _visitorsCtrl.add(visitorList);
+    }
+  }
 
   Future<void> start() async {
     if (isRunning) return;
@@ -311,6 +349,21 @@ class LocalLanSyncHost {
     res.headers.set('Access-Control-Allow-Headers', 'Content-Type');
     final path = req.uri.path;
 
+    final remote = req.connectionInfo?.remoteAddress.address ?? '';
+    final q = req.uri.queryParameters;
+    final clientId = q['clientDeviceId'] ?? q['deviceId'] ?? '';
+    final clientName = q['clientName'] ?? '';
+    final clientPort =
+        int.tryParse(q['clientPort'] ?? '') ?? LocalLanSync.httpPort;
+    if (remote.isNotEmpty && path != '/') {
+      _noteVisitor(
+        host: remote,
+        deviceId: clientId,
+        name: clientName.isNotEmpty ? clientName : remote,
+        port: clientPort,
+      );
+    }
+
     if (req.method == 'OPTIONS') {
       res.statusCode = 204;
       await res.close();
@@ -335,6 +388,8 @@ class LocalLanSyncHost {
         'exportedAt': payload['exportedAt'],
         'addresses': addrs,
         'port': LocalLanSync.httpPort,
+        // 告诉对方：在我这边看到的你的地址（便于单向连通时填 IP）
+        'clientSeenAs': remote,
       }));
       await res.close();
       return;
@@ -566,7 +621,7 @@ class LocalLanSyncClient {
       try {
         final uri = Uri.parse(
           'http://$host:${LocalLanSync.httpPort}/info',
-        );
+        ).replace(queryParameters: LocalLanSync.clientQuery());
         final req = await client.getUrl(uri);
         final res = await req.close().timeout(const Duration(milliseconds: 400));
         if (res.statusCode != 200) {
@@ -626,6 +681,7 @@ class LocalLanSyncClient {
     try {
       final cats = categories ?? Pref.lanSyncCategories;
       final q = {
+        ...LocalLanSync.clientQuery(),
         'pin': pin,
         'deviceId': LocalLanSync.deviceId(),
         if (cats.isNotEmpty) 'categories': cats.join(','),
@@ -681,6 +737,7 @@ class LocalLanSyncClient {
     try {
       final payload = LocalLanSync.buildSnapshot(categories: categories);
       final q = {
+        ...LocalLanSync.clientQuery(),
         'pin': pin,
         'deviceId': LocalLanSync.deviceId(),
       };

@@ -26,6 +26,9 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
   late Set<String> _cats;
   final _ipCtrl = TextEditingController();
 
+  StreamSubscription? _visitorSub;
+  List<LanPeer> _visitors = [];
+
   @override
   void initState() {
     super.initState();
@@ -33,10 +36,15 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
     _refreshLocalIps();
     _hosting = _host.isRunning;
     _pin = _host.pin;
+    _visitors = List<LanPeer>.from(_host.visitorList);
+    _visitorSub = _host.visitors$.listen((list) {
+      if (mounted) setState(() => _visitors = list);
+    });
   }
 
   @override
   void dispose() {
+    _visitorSub?.cancel();
     _ipCtrl.dispose();
     super.dispose();
   }
@@ -98,7 +106,8 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
       final client = HttpClient();
       client.connectionTimeout = const Duration(seconds: 10);
       client.idleTimeout = const Duration(seconds: 12);
-      final uri = Uri.parse('http://$host:$port/info');
+      final uri = Uri.parse('http://$host:$port/info')
+          .replace(queryParameters: LocalLanSync.clientQuery());
       final req = await client.getUrl(uri);
       final res = await req.close().timeout(const Duration(seconds: 12));
       final body = await res.transform(utf8.decoder).join();
@@ -389,6 +398,41 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
             }),
             const SizedBox(height: 8),
           ],
+          if (_hosting && _visitors.isNotEmpty) ...[
+            Text('刚连过本机的设备', style: theme.textTheme.titleMedium),
+            Text(
+              '对方能连你、你连不回时：用下面地址同步，或让对方点「推送到对方」',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ..._visitors.map(
+              (p) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.login),
+                  title: Text(p.name),
+                  subtitle: Text('${p.host}:${p.port}（来自对方连入）'),
+                  trailing: FilledButton(
+                    onPressed: _busy
+                        ? null
+                        : () {
+                            setState(() {
+                              _peers = [
+                                p,
+                                ..._peers.where((e) => e.deviceId != p.deviceId),
+                              ];
+                              _ipCtrl.text = p.host;
+                            });
+                            _pull(p);
+                          },
+                    child: const Text('拉取'),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: [
               Expanded(
@@ -438,7 +482,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                 child: Text(
                   _scanning
                       ? '正在搜索（广播 + 网段探测）…'
-                      : '点击扫描。对方须先开启「允许同步」且同一 WiFi',
+                      : '点扫描或等对方先连你。单向不通时：你开同步源，让对方「推送到对方」',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: theme.colorScheme.outline),
                 ),
@@ -486,7 +530,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
             '说明\n'
             '· 拉取：合并对方数据到本机；推送：把本机数据合并到对方\n'
             '· 成功后自动配对，下次可少输 PIN；启动自动同步仅对已配对设备\n'
-            '· 仅在可信设备与同一 Wi‑Fi 下使用',
+            '· 仅在可信设备与同一 Wi‑Fi 下使用\n· 若只有对方能添加你：请对方使用「推送到对方」，或看上方「刚连过本机的设备」',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
               height: 1.5,
