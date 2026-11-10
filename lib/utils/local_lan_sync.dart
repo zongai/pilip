@@ -194,6 +194,21 @@ class LocalLanSyncHost {
   Stream<List<LanPeer>> get visitors$ => _visitorsCtrl.stream;
   List<LanPeer> get visitorList => recentVisitors.values.toList();
 
+  /// 希望这些 deviceId 在下次连入时主动把数据推给本机
+  final Set<String> pendingPushFrom = {};
+  /// 对方来拉 /info 时若在 pending 中，附带 pleasePush
+  void requestPushFrom(String deviceId, {String? hostKey}) {
+    if (deviceId.isNotEmpty) pendingPushFrom.add(deviceId);
+    if (hostKey != null && hostKey.isNotEmpty) {
+      pendingPushFrom.add('ip-$hostKey');
+    }
+  }
+
+  void clearPushRequest(String deviceId, {String? host}) {
+    pendingPushFrom.remove(deviceId);
+    if (host != null) pendingPushFrom.remove('ip-$host');
+  }
+
   void _noteVisitor({
     required String host,
     required String deviceId,
@@ -380,6 +395,8 @@ class LocalLanSyncHost {
       final payload = LocalLanSync.buildSnapshot();
       final addrs = await LocalLanSync.localIPv4s();
       res.headers.contentType = ContentType.json;
+      final wantPush = (clientId.isNotEmpty && pendingPushFrom.contains(clientId)) ||
+          (remote.isNotEmpty && pendingPushFrom.contains('ip-$remote'));
       res.write(jsonEncode({
         'name': name,
         'deviceId': id,
@@ -388,8 +405,9 @@ class LocalLanSyncHost {
         'exportedAt': payload['exportedAt'],
         'addresses': addrs,
         'port': LocalLanSync.httpPort,
-        // 告诉对方：在我这边看到的你的地址（便于单向连通时填 IP）
         'clientSeenAs': remote,
+        'pleasePush': wantPush,
+        if (wantPush && pin != null) 'pleasePushPin': pin,
       }));
       await res.close();
       return;
@@ -432,8 +450,9 @@ class LocalLanSyncHost {
           Map<String, dynamic>.from(decoded),
           replace: false,
         );
+        clearPushRequest(clientId, host: remote);
         res.headers.contentType = ContentType.json;
-        res.write(jsonEncode({'ok': true}));
+        res.write(jsonEncode({'ok': true, 'merged': true}));
       } catch (e) {
         res.statusCode = 500;
         res.write(jsonEncode({'error': '$e'}));
@@ -718,7 +737,18 @@ class LocalLanSyncClient {
       }
       return true;
     } catch (e) {
-      SmartDialog.showToast('同步失败：$e');
+      // 单向防火墙：登记请对方推送
+      final host = LocalLanSyncHost.instance;
+      if (host.isRunning) {
+        host.requestPushFrom(peer.deviceId, hostKey: peer.host);
+        SmartDialog.showToast(
+          '无法连接对方（多为对方防火墙）。已请求对方推送：请对方再扫描/连接本机，或点「推送到对方」',
+        );
+      } else {
+        SmartDialog.showToast(
+          '同步失败：$e。请先开启「作为同步源」，再让对方「推送到对方」',
+        );
+      }
       return false;
     } finally {
       client.close(force: true);
@@ -780,6 +810,30 @@ class LocalLanSyncClient {
     } finally {
       client.close(force: true);
     }
+  }
+
+  /// 若 /info 返回 pleasePush，则把本机数据推给对方（对方防火墙拦入站时的反向同步）
+  static Future<bool> maybePushIfRequested({
+    required LanPeer peer,
+    required Map info,
+    String? pinHint,
+  }) async {
+    if (info['pleasePush'] != true) return false;
+    var pin = pinHint ??
+        info['pleasePushPin']?.toString() ??
+        peer.savedPin ??
+        '';
+    if (pin.isEmpty) {
+      SmartDialog.showToast('对方请求你推送数据，请输入对方 PIN 后点「推送到对方」');
+      return false;
+    }
+    SmartDialog.showToast('对方请求推送，正在推送…');
+    final ok = await pushToPeer(
+      peer: peer,
+      pin: pin,
+      remember: true,
+    );
+    return ok;
   }
 
   /// 启动后自动：扫描已配对设备并静默合并（需开启设置）

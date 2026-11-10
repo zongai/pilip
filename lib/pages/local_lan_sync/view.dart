@@ -137,6 +137,11 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           ? '（对方：${addrs.take(3).join(", ")}）'
           : '';
       SmartDialog.showToast('已连接 ${peer.name}$extra');
+      // 若对方登记了「请推送」，自动把本机数据推过去
+      await LocalLanSyncClient.maybePushIfRequested(
+        peer: peer,
+        info: Map<String, dynamic>.from(json),
+      );
     } on SocketException catch (e) {
       final timedOut = e.message.contains('timed out') ||
           e.message.contains('Timeout') ||
@@ -398,7 +403,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
           if (_hosting && _visitors.isNotEmpty) ...[
             Text('刚连过本机的设备', style: theme.textTheme.titleMedium),
             Text(
-              '对方能连你、你连不回时：用下面地址同步，或让对方点「推送到对方」',
+              '对方能连你、你连不回时：点「请求同步」后，请对方再扫描/连接本机（自动推送），或对方手动「推送到对方」',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.primary,
               ),
@@ -413,7 +418,7 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                   trailing: FilledButton(
                     onPressed: _busy
                         ? null
-                        : () {
+                        : () async {
                             setState(() {
                               _peers = [
                                 p,
@@ -421,9 +426,17 @@ class _LocalLanSyncPageState extends State<LocalLanSyncPage> {
                               ];
                               _ipCtrl.text = p.host;
                             });
-                            _pull(p);
+                            // 先尝试直连拉取；失败会自动登记 pleasePush
+                            if (!_hosting) {
+                              await _toggleHost(true);
+                            }
+                            _host.requestPushFrom(p.deviceId, hostKey: p.host);
+                            SmartDialog.showToast(
+                              '已请求「${p.name}」推送。请对方再点扫描或连接本机（将自动推送）',
+                            );
+                            await _pull(p);
                           },
-                    child: const Text('拉取'),
+                    child: const Text('请求同步'),
                   ),
                 ),
               ),
