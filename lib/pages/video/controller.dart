@@ -355,7 +355,7 @@ class VideoDetailController extends GetxController
     }
   }
 
-  void _recordLocalHistory() {
+  void _recordLocalHistory({bool forceCompleted = false}) {
     try {
       String? title;
       String? coverStr = cover.value;
@@ -363,10 +363,17 @@ class VideoDetailController extends GetxController
       int? authorMid;
       int durationSec = 0;
       int progressSec = 0;
-      if (plPlayerController.playerStatus.isCompleted) {
+      if (forceCompleted || plPlayerController.playerStatus.isCompleted) {
         progressSec = -1; // 已看完
       } else if (playedTime case final t?) {
         progressSec = t.inSeconds;
+        // 离结尾不足 1 秒也视为看完
+        final totalMs = data.timeLength;
+        if (totalMs != null &&
+            totalMs > 0 &&
+            (totalMs - t.inMilliseconds).abs() <= 1000) {
+          progressSec = -1;
+        }
       }
       try {
         final intro = Get.find<UgcIntroController>(tag: heroTag);
@@ -378,6 +385,10 @@ class VideoDetailController extends GetxController
         durationSec = detail.duration ?? 0;
       } catch (_) {
         title = args['title'] as String?;
+        durationSec = ((data.timeLength ?? 0) / 1000).round();
+      }
+      if (durationSec <= 0 && data.timeLength != null) {
+        durationSec = (data.timeLength! / 1000).round();
       }
       Pref.addLocalHistory(
         aid: aid,
@@ -391,6 +402,18 @@ class VideoDetailController extends GetxController
         duration: durationSec,
       );
     } catch (_) {}
+  }
+
+  /// 播放完成时写入本地已看（在线源原先未调用）
+  void onLocalPlayCompleted() {
+    if (!Pref.enableLocalFeatures) return;
+    _recordLocalHistory(forceCompleted: true);
+  }
+
+  /// 退出/切集时保存当前进度
+  void onLocalPlayProgressSave() {
+    if (!Pref.enableLocalFeatures) return;
+    _recordLocalHistory();
   }
 
   void _initLocalSkipIfNeeded() {
@@ -1707,6 +1730,8 @@ class VideoDetailController extends GetxController
     cid.close();
     if (isFileSource) {
       cacheLocalProgress();
+    } else {
+      onLocalPlayProgressSave();
     }
     introScrollCtr?.dispose();
     introScrollCtr = null;
@@ -1723,6 +1748,8 @@ class VideoDetailController extends GetxController
   void onReset({bool isStein = false}) {
     if (isFileSource) {
       cacheLocalProgress();
+    } else {
+      onLocalPlayProgressSave();
     }
 
     playedTime = null;

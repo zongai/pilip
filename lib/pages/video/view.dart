@@ -243,6 +243,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
 
     if (status.isCompleted) {
+      // 先写入本地已看，再连播/切集，避免进度丢失
+      videoDetailController.onLocalPlayCompleted();
+
       try {
         if (videoDetailController
                 .steinEdgeInfo
