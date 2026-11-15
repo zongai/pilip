@@ -136,64 +136,61 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
     _refresh();
   }
 
-  Widget _playlistTile(ThemeData theme, Map pl) {
-    final rawItems = pl['items'];
-    final items = rawItems is List ? rawItems : const [];
-    final title = pl['title'] as String? ?? '未命名';
-    String? cover;
-    if (items.isNotEmpty && items.first is Map) {
-      cover = (items.first as Map)['cover'] as String?;
-    }
+  Widget _playlistTile(ThemeData theme, Map pl, {bool dense = true}) {
+    final id = _asInt(pl['id']) ?? 0;
+    final title = pl['name'] as String? ?? '列表';
+    final items = Pref.getLocalVideoPlaylistItems(id);
+    final cover = items.isNotEmpty ? items.first['cover'] as String? : null;
     final outline = theme.colorScheme.outline;
+    final radius = dense ? BorderRadius.zero : BorderRadius.circular(12);
+    final thumb = dense ? 64.0 : 56.0;
+
     return Material(
-      type: MaterialType.transparency,
+      color: dense
+          ? null
+          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      type: dense ? MaterialType.transparency : MaterialType.canvas,
+      borderRadius: radius,
       child: InkWell(
+        borderRadius: radius,
         onTap: () => _open(pl),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Style.safeSpace,
-            vertical: 5,
+          padding: EdgeInsets.fromLTRB(
+            dense ? Style.safeSpace : 12,
+            dense ? 8 : 8,
+            4,
+            dense ? 8 : 8,
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 140,
-                child: AspectRatio(
-                  aspectRatio: Style.aspectRatio,
-                  child: NetworkImgLayer(
-                    src: cover,
-                    width: 140,
-                    height: 140 / Style.aspectRatio,
-                  ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: NetworkImgLayer(
+                  src: cover,
+                  width: thumb,
+                  height: thumb * 0.62,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: SizedBox(
-                  height: 85,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: theme.textTheme.bodyMedium!.fontSize,
-                          height: 1.42,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${items.length} 个视频 · 按标题排序',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: outline),
-                      ),
-                    ],
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${items.length} 个视频 · 按标题排序',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: outline),
+                    ),
+                  ],
                 ),
               ),
               PopupMenuButton<String>(
@@ -238,22 +235,54 @@ class _LocalVideoPlaylistPageState extends State<LocalVideoPlaylistPage> {
           ? Center(child: Text('暂无播放列表', style: TextStyle(color: outline)))
           : LayoutBuilder(
               builder: (context, constraints) {
-                final list = ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 88),
-                  itemCount: _playlists.length,
-                  itemBuilder: (context, index) =>
-                      _playlistTile(theme, _playlists[index]),
+                final maxW = constraints.maxWidth;
+                final useGrid = maxW >= 600;
+                final contentMax = maxW >= 1400
+                    ? 1200.0
+                    : maxW >= 1000
+                        ? 960.0
+                        : maxW;
+                final padH = maxW >= 600 ? 12.0 : 0.0;
+                final padding = EdgeInsets.only(
+                  left: padH,
+                  right: padH,
+                  top: 4,
+                  bottom: 88,
                 );
-                // 宽屏：居中限制最大宽度，多列网格在详情页使用
-                if (constraints.maxWidth < 720) return list;
+
+                Widget child;
+                if (!useGrid) {
+                  child = ListView.builder(
+                    padding: padding,
+                    itemCount: _playlists.length,
+                    itemBuilder: (context, index) => _playlistTile(
+                      theme,
+                      _playlists[index],
+                      dense: true,
+                    ),
+                  );
+                } else {
+                  child = GridView.builder(
+                    padding: padding,
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: maxW >= 1100 ? 300.0 : 280.0,
+                      mainAxisExtent: 80,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 10,
+                    ),
+                    itemCount: _playlists.length,
+                    itemBuilder: (context, index) => _playlistTile(
+                      theme,
+                      _playlists[index],
+                      dense: false,
+                    ),
+                  );
+                }
+
+                if (maxW <= contentMax + 1) return child;
                 return Align(
                   alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: constraints.maxWidth >= 1200 ? 960 : 720,
-                    ),
-                    child: list,
-                  ),
+                  child: SizedBox(width: contentMax, child: child),
                 );
               },
             ),
@@ -498,7 +527,7 @@ class _LocalVideoPlaylistDetailPageState
     }
   }
 
-  Widget _videoTile(ThemeData theme, int index, Map item) {
+  Widget _videoTile(ThemeData theme, int index, Map item, {bool dense = true}) {
     final title = item['title'] as String? ?? '';
     final cover = item['cover'] as String?;
     final author = item['authorName'] as String? ?? '';
@@ -538,8 +567,8 @@ class _LocalVideoPlaylistDetailPageState
           }
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Style.safeSpace,
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? Style.safeSpace : 8,
             vertical: 5,
           ),
           child: Row(
@@ -559,7 +588,7 @@ class _LocalVideoPlaylistDetailPageState
                   ),
                 ),
               SizedBox(
-                width: 140,
+                width: dense ? 140.0 : 120.0,
                 child: AspectRatio(
                   aspectRatio: Style.aspectRatio,
                   child: Stack(
@@ -569,8 +598,8 @@ class _LocalVideoPlaylistDetailPageState
                         watched: watched,
                         child: NetworkImgLayer(
                           src: cover,
-                          width: 140,
-                          height: 140 / Style.aspectRatio,
+                          width: dense ? 140.0 : 120.0,
+                          height: (dense ? 140.0 : 120.0) / Style.aspectRatio,
                         ),
                       ),
                       if (Pref.enableLocalFeatures)
@@ -742,29 +771,43 @@ class _LocalVideoPlaylistDetailPageState
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                Widget list({EdgeInsetsGeometry? padding}) => ListView.builder(
-                      padding: padding ?? const EdgeInsets.only(bottom: 24),
-                      itemCount: _list.length,
-                      itemBuilder: (context, index) =>
-                          _videoTile(theme, index, _list[index]),
-                    );
-                if (constraints.maxWidth < 720) {
-                  return list();
+                final maxW = constraints.maxWidth;
+                final useGrid = maxW >= 600;
+                final contentMax = maxW >= 1400
+                    ? 1200.0
+                    : maxW >= 1000
+                        ? 960.0
+                        : maxW;
+                final padH = maxW >= 600 ? 8.0 : 0.0;
+                final padding = EdgeInsets.fromLTRB(padH, 4, padH, 24);
+
+                Widget child;
+                if (!useGrid) {
+                  child = ListView.builder(
+                    padding: padding,
+                    itemCount: _list.length,
+                    itemBuilder: (context, index) =>
+                        _videoTile(theme, index, _list[index], dense: true),
+                  );
+                } else {
+                  child = GridView.builder(
+                    padding: padding,
+                    gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: maxW >= 1100 ? 400.0 : 360.0,
+                      mainAxisExtent: 96,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 8,
+                    ),
+                    itemCount: _list.length,
+                    itemBuilder: (context, index) =>
+                        _videoTile(theme, index, _list[index], dense: false),
+                  );
                 }
-                // 宽屏多列
-                return GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
-                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: constraints.maxWidth >= 1100
-                        ? 520
-                        : 480,
-                    mainAxisExtent: 100,
-                    mainAxisSpacing: 2,
-                    crossAxisSpacing: 4,
-                  ),
-                  itemCount: _list.length,
-                  itemBuilder: (context, index) =>
-                      _videoTile(theme, index, _list[index]),
+
+                if (maxW <= contentMax + 1) return child;
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(width: contentMax, child: child),
                 );
               },
             ),
