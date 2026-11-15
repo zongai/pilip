@@ -355,19 +355,55 @@ class VideoDetailController extends GetxController
     }
   }
 
+  void _fillLocalMeta({
+    required void Function(
+      String? title,
+      String? cover,
+      String? authorName,
+      int? authorMid,
+      int durationSec,
+    ) use,
+  }) {
+    String? title;
+    String? coverStr = cover.value;
+    String? authorName;
+    int? authorMid;
+    int durationSec = 0;
+    try {
+      final intro = Get.find<UgcIntroController>(tag: heroTag);
+      final detail = intro.videoDetail.value;
+      title = detail.title;
+      coverStr = coverStr.isNotEmpty ? coverStr : detail.pic;
+      authorName = detail.owner?.name;
+      authorMid = detail.owner?.mid;
+      durationSec = detail.duration ?? 0;
+    } catch (_) {
+      try {
+        final intro = Get.find<PgcIntroController>(tag: heroTag);
+        // PGC 尽量补时长
+        durationSec = ((data.timeLength ?? 0) / 1000).round();
+        title = args['title'] as String?;
+        coverStr = coverStr.isNotEmpty
+            ? coverStr
+            : (args['cover'] as String? ?? coverStr);
+      } catch (_) {
+        title = args['title'] as String?;
+        durationSec = ((data.timeLength ?? 0) / 1000).round();
+      }
+    }
+    if (durationSec <= 0 && data.timeLength != null) {
+      durationSec = (data.timeLength! / 1000).round();
+    }
+    use(title, coverStr, authorName, authorMid, durationSec);
+  }
+
   void _recordLocalHistory({bool forceCompleted = false}) {
     try {
-      String? title;
-      String? coverStr = cover.value;
-      String? authorName;
-      int? authorMid;
-      int durationSec = 0;
       int progressSec = 0;
       if (forceCompleted || plPlayerController.playerStatus.isCompleted) {
-        progressSec = -1; // 已看完
+        progressSec = -1;
       } else if (playedTime case final t?) {
         progressSec = t.inSeconds;
-        // 离结尾不足 1 秒也视为看完
         final totalMs = data.timeLength;
         if (totalMs != null &&
             totalMs > 0 &&
@@ -375,42 +411,46 @@ class VideoDetailController extends GetxController
           progressSec = -1;
         }
       }
-      try {
-        final intro = Get.find<UgcIntroController>(tag: heroTag);
-        final detail = intro.videoDetail.value;
-        title = detail.title;
-        coverStr = coverStr.isNotEmpty ? coverStr : detail.pic;
-        authorName = detail.owner?.name;
-        authorMid = detail.owner?.mid;
-        durationSec = detail.duration ?? 0;
-      } catch (_) {
-        title = args['title'] as String?;
-        durationSec = ((data.timeLength ?? 0) / 1000).round();
-      }
-      if (durationSec <= 0 && data.timeLength != null) {
-        durationSec = (data.timeLength! / 1000).round();
-      }
-      Pref.addLocalHistory(
-        aid: aid,
-        bvid: bvid,
-        cid: cid.value,
-        title: title,
-        cover: coverStr,
-        authorName: authorName,
-        authorMid: authorMid,
-        progress: progressSec,
-        duration: durationSec,
-      );
+      // 无进度且非完成：不写，避免打开页面冲掉已看完
+      if (!forceCompleted && progressSec == 0) return;
+
+      _fillLocalMeta(use: (title, coverStr, authorName, authorMid, durationSec) {
+        if (progressSec < 0) {
+          Pref.markLocalWatched(
+            aid: aid,
+            bvid: bvid,
+            cid: cid.value,
+            title: title,
+            cover: coverStr,
+            authorName: authorName,
+            authorMid: authorMid,
+            duration: durationSec,
+            completed: true,
+          );
+        } else {
+          Pref.addLocalHistory(
+            aid: aid,
+            bvid: bvid,
+            cid: cid.value,
+            title: title,
+            cover: coverStr,
+            authorName: authorName,
+            authorMid: authorMid,
+            progress: progressSec,
+            duration: durationSec,
+          );
+        }
+      });
     } catch (_) {}
   }
 
-  /// 播放完成时写入本地已看（在线源原先未调用）
+  /// 播放完成时写入本地已看
   void onLocalPlayCompleted() {
     if (!Pref.enableLocalFeatures) return;
     _recordLocalHistory(forceCompleted: true);
   }
 
-  /// 退出/切集时保存当前进度
+  /// 退出/切集/进后台时保存当前进度
   void onLocalPlayProgressSave() {
     if (!Pref.enableLocalFeatures) return;
     _recordLocalHistory();
@@ -527,9 +567,7 @@ class VideoDetailController extends GetxController
           : 0,
     );
 
-    if (Pref.enableLocalFeatures) {
-      Future.microtask(_recordLocalHistory);
-    }
+    // 不再在进页时写 progress=0，避免冲掉「已看完」
   }
 
   Future<void> getMediaList({

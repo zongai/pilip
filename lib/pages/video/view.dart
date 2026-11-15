@@ -196,6 +196,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     } else if (state == .paused) {
       introController.cancelTimer();
       ctr.showDanmaku = false;
+      // 进后台保存本地进度，避免进程被杀丢失
+      videoDetailController.onLocalPlayProgressSave();
     }
   }
 

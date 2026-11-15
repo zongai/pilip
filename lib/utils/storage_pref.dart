@@ -801,17 +801,63 @@ abstract final class Pref {
     if ((bvid == null || bvid.isEmpty) && aid == null) return;
     final list = List<Map>.from(localHistory);
     final key = bvid ?? 'av$aid';
+    Map? prev;
+    for (final e in list) {
+      if ((e['bvid'] ?? 'av${e['aid']}') == key) {
+        prev = e;
+        break;
+      }
+    }
     list.removeWhere((e) => (e['bvid'] ?? 'av${e['aid']}') == key);
+
+    int prog = progress ?? 0;
+    int dur = duration ?? 0;
+    // 已看完不可被「刚打开/未完成进度」降级覆盖
+    if (prev != null) {
+      final oldProg = prev['progress'];
+      final oldDur = prev['duration'];
+      int oldP = 0;
+      if (oldProg is int) {
+        oldP = oldProg;
+      } else if (oldProg is num) {
+        oldP = oldProg.toInt();
+      }
+      if (oldP < 0 && prog >= 0) {
+        prog = -1;
+      }
+      if (dur <= 0) {
+        if (oldDur is int) {
+          dur = oldDur;
+        } else if (oldDur is num) {
+          dur = oldDur.toInt();
+        }
+      }
+      // 保留更好进度（更大已看秒数）
+      if (prog >= 0 && oldP > prog) {
+        prog = oldP;
+      }
+    }
+    // 无意义的 0 进度且无旧记录：不写入，避免「打开即已看」
+    if (prev == null && prog == 0) {
+      return;
+    }
+
     list.insert(0, {
-      'aid': aid,
-      'bvid': bvid,
-      'cid': cid,
-      'title': title ?? '',
-      'cover': cover ?? '',
-      'authorName': authorName ?? '',
-      'authorMid': authorMid,
-      'progress': progress ?? 0,
-      'duration': duration ?? 0,
+      'aid': aid ?? prev?['aid'],
+      'bvid': bvid ?? prev?['bvid'],
+      'cid': cid ?? prev?['cid'],
+      'title': (title != null && title.isNotEmpty)
+          ? title
+          : (prev?['title'] ?? ''),
+      'cover': (cover != null && cover.isNotEmpty)
+          ? cover
+          : (prev?['cover'] ?? ''),
+      'authorName': (authorName != null && authorName.isNotEmpty)
+          ? authorName
+          : (prev?['authorName'] ?? ''),
+      'authorMid': authorMid ?? prev?['authorMid'],
+      'progress': prog,
+      'duration': dur,
       'viewAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
     });
     // 最多保留 500 条
