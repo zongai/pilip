@@ -373,7 +373,9 @@ class VideoDetailController extends GetxController
       final intro = Get.find<UgcIntroController>(tag: heroTag);
       final detail = intro.videoDetail.value;
       title = detail.title;
-      coverStr = coverStr.isNotEmpty ? coverStr : detail.pic;
+      if (coverStr == null || coverStr.isEmpty) {
+        coverStr = detail.pic;
+      }
       authorName = detail.owner?.name;
       authorMid = detail.owner?.mid;
       durationSec = detail.duration ?? 0;
@@ -383,9 +385,9 @@ class VideoDetailController extends GetxController
         // PGC 尽量补时长
         durationSec = ((data.timeLength ?? 0) / 1000).round();
         title = args['title'] as String?;
-        coverStr = coverStr.isNotEmpty
-            ? coverStr
-            : (args['cover'] as String? ?? coverStr);
+        if (coverStr == null || coverStr.isEmpty) {
+          coverStr = args['cover'] as String? ?? coverStr;
+        }
       } catch (_) {
         title = args['title'] as String?;
         durationSec = ((data.timeLength ?? 0) / 1000).round();
